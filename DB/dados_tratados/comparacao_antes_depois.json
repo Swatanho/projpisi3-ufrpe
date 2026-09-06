@@ -1,0 +1,21 @@
+{
+  "antes": {
+    "linhas": 253680,
+    "colunas": 14
+  },
+  "depois": {
+    "linhas": 150740,
+    "colunas": 14
+  },
+  "linhas_removidas_como_outliers": 102940,
+  "percentual_de_linhas_removidas": 40.5787,
+  "atributos_removidos_por_variancia": [],
+  "distribuicao_alvo_antes": {
+    "0.0": 229787,
+    "1.0": 23893
+  },
+  "distribuicao_alvo_depois": {
+    "0.0": 143342,
+    "1.0": 7398
+  }
+}
