@@ -11,5 +11,6 @@ Dataset utilizado: https://www.kaggle.com/datasets/alexteboul/diabetes-health-in
 
 #### Pastas:
 DB: Contém o dataset original
+
 dados_tratados: dataset pós tratamento, com alguns arquivos úteis de análise.
 
