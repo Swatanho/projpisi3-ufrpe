@@ -12,9 +12,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-from sklearn.ensemble import IsolationForest
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import StandardScaler
 
 
 ALVO = "HeartDiseaseorAttack"
@@ -34,7 +32,6 @@ def ler_dataset(caminho: Path) -> pd.DataFrame:
 # Escolhe os atributos necessários
 
 def selecionar_atributos(df: pd.DataFrame) -> pd.DataFrame:
-    """Mantém somente o alvo e os atributos definidos pela equipe."""
     colunas = [ALVO, *ATRIBUTOS_RELEVANTES]
     ausentes = [coluna for coluna in colunas if coluna not in df.columns]
     if ausentes:
@@ -77,34 +74,56 @@ def remover_sem_variancia(
     return df.loc[:, [ALVO, *mantidas]].copy(), removidas
 
 
-# Aplicação do Isolation Forest
+# Tratamento de valores extremos do BMI (WINSORIZAÇÃO de valores extremos de BMI)
+#
+# O BMI é a única variável contínua do conjunto. As demais colunas são fatores
+# de risco binários/ordinais, cujas combinações raras representam justamente os
+# grupos de maior risco e não devem ser descartadas. Por isso, em vez de remover
+# linhas, aplicamos winsorização simétrica: valores acima do percentil superior
+# são limitados ao teto e valores abaixo do percentil inferior são limitados ao
+# piso, preservando todos os registros e a distribuição da classe alvo.
+#
+# Com o percentil padrão de 99.5, o teto é o P99,5 (= 55) e o piso é o P0,5
+# (= 17). O piso de 17 absorve BMIs de 12 a 16, que são fisiologicamente
+# implausíveis (provável erro de digitação ou desnutrição severa) sem removê-los.
 
-def tratar_outliers(
+def tratar_bmi_extremo(
     df: pd.DataFrame,
-    contaminacao: str | float = "auto",
-    semente: int = 42,
+    coluna: str = "BMI",
+    limite_percentil: float = 99.5,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    preditores = df.drop(columns=ALVO)
-    if preditores.shape[1] == 0:
-        raise ValueError("Nenhum atributo restou para detectar outliers.")
 
-    # O alvo não entra no modelo, evitando vazamento de informação.
-    dados_escalados = StandardScaler().fit_transform(preditores)
-    modelo = IsolationForest(
-        n_estimators=200,
-        contamination=contaminacao,
-        random_state=semente,
-        n_jobs=-1,
+    if coluna not in df.columns:
+        raise ValueError(f"Coluna não encontrada: {coluna}")
+    if not 50 < limite_percentil <= 100:
+        raise ValueError("O percentil deve estar entre 50 (exclusivo) e 100.")
+
+    teto = float(df[coluna].quantile(limite_percentil / 100))
+    piso = float(df[coluna].quantile((100 - limite_percentil) / 100))
+
+    mascara_superior = df[coluna] > teto
+    mascara_inferior = df[coluna] < piso
+
+    registros_superior = df.loc[mascara_superior].copy()
+    registros_superior.insert(0, "indice_original", registros_superior.index)
+    registros_superior["valor_original"] = registros_superior[coluna]
+    registros_superior["valor_limitado"] = teto
+    registros_superior["tipo_limite"] = "superior"
+
+    registros_inferior = df.loc[mascara_inferior].copy()
+    registros_inferior.insert(0, "indice_original", registros_inferior.index)
+    registros_inferior["valor_original"] = registros_inferior[coluna]
+    registros_inferior["valor_limitado"] = piso
+    registros_inferior["tipo_limite"] = "inferior"
+
+    registros = pd.concat(
+        [registros_superior, registros_inferior], ignore_index=True
     )
-    classificacao = modelo.fit_predict(dados_escalados)
-    pontuacao = modelo.decision_function(dados_escalados)
-    mascara_outlier = classificacao == -1
 
-    outliers = df.loc[mascara_outlier].copy()
-    outliers.insert(0, "indice_original", outliers.index)
-    outliers["pontuacao_isolation_forest"] = pontuacao[mascara_outlier]
-    tratados = df.loc[~mascara_outlier].copy().reset_index(drop=True)
-    return tratados, outliers.reset_index(drop=True)
+    tratado = df.copy()
+    tratado.loc[mascara_superior, coluna] = teto
+    tratado.loc[mascara_inferior, coluna] = piso
+    return tratado.reset_index(drop=True), registros.reset_index(drop=True)
 
 # SEÇÃO DE COMPARAÇÃO DE DADOS
 
@@ -120,15 +139,16 @@ def gerar_comparacao(
     antes: pd.DataFrame,
     depois: pd.DataFrame,
     removidas: list[str],
-    total_outliers: int,
+    total_ajustados: int,
     pasta_saida: Path,
 ) -> None:
-    percentual = (total_outliers / len(antes) * 100) if len(antes) else 0.0
+    percentual = (total_ajustados / len(antes) * 100) if len(antes) else 0.0
     comparacao = {
         "antes": {"linhas": len(antes), "colunas": antes.shape[1]},
         "depois": {"linhas": len(depois), "colunas": depois.shape[1]},
-        "linhas_removidas_como_outliers": total_outliers,
-        "percentual_de_linhas_removidas": round(percentual, 4),
+        "linhas_removidas": 0,
+        "registros_com_bmi_limitado": total_ajustados,
+        "percentual_de_registros_ajustados": round(percentual, 4),
         "atributos_removidos_por_variancia": removidas,
         "distribuicao_alvo_antes": {
             str(k): int(v) for k, v in antes[ALVO].value_counts().sort_index().items()
@@ -145,49 +165,58 @@ def gerar_comparacao(
         ignore_index=True,
     ).to_csv(pasta_saida / "estatisticas_antes_depois.csv", index=False)
 
-####
+#### EXECUÇÃO
 
 def executar_tratamento(
     entrada: Path,
     pasta_saida: Path,
     limite_variancia: float,
-    contaminacao: str | float,
+    limite_percentil_bmi: float,
 ) -> None:
     original = ler_dataset(entrada)
     selecionado = selecionar_atributos(original)
     sem_redundancia, removidas = remover_sem_variancia(
         selecionado, limite_variancia
     )
-    tratado, outliers = tratar_outliers(sem_redundancia, contaminacao)
+    tratado, registros_bmi = tratar_bmi_extremo(
+        sem_redundancia, limite_percentil=limite_percentil_bmi
+    )
 
     pasta_saida.mkdir(parents=True, exist_ok=True)
     tratado.to_csv(pasta_saida / "diabetes_cardiaco_tratado.csv", index=False)
-    outliers.to_csv(pasta_saida / "registros_outliers.csv", index=False)
+    registros_bmi.to_csv(pasta_saida / "registros_bmi_limitado.csv", index=False)
     gerar_comparacao(
-        selecionado, tratado, removidas, len(outliers), pasta_saida
+        selecionado, tratado, removidas, len(registros_bmi), pasta_saida
     )
 
     print("Tratamento concluído.")
     print(f"Linhas antes: {len(selecionado):,}")
     print(f"Linhas depois: {len(tratado):,}")
-    print(f"Outliers removidos: {len(outliers):,}")
+    print(f"Registros com BMI limitado: {len(registros_bmi):,}")
+    if not registros_bmi.empty:
+        print(
+            "Limites por tipo: "
+            + ", ".join(
+                f"{tipo}={int(total)}"
+                for tipo, total in registros_bmi["tipo_limite"].value_counts().items()
+            )
+        )
     print(f"Atributos removidos por variância: {removidas or 'nenhum'}")
     print(f"Resultados: {pasta_saida.resolve()}")
 
+#  Aceita um percentil entre 50 (exclusivo) e 100 para limitar o BMI.
 
-def interpretar_contaminacao(valor: str) -> str | float:
-    """Aceita 'auto' ou uma proporção entre 0 e 0,5."""
-    if valor.lower() == "auto":
-        return "auto"
+def interpretar_percentil(valor: str) -> float:
+   
     try:
         numero = float(valor)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
-            "Use 'auto' ou um número maior que 0 e menor ou igual a 0.5."
+            "Use um número maior que 50 e menor ou igual a 100."
         ) from exc
-    if not 0 < numero <= 0.5:
+    if not 50 < numero <= 100:
         raise argparse.ArgumentTypeError(
-            "A contaminação deve ser maior que 0 e menor ou igual a 0.5."
+            "O percentil deve ser maior que 50 e menor ou igual a 100."
         )
     return numero
 
@@ -195,12 +224,12 @@ def interpretar_contaminacao(valor: str) -> str | float:
 def argumentos() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-    "entrada",
-    type=Path,
-    nargs="?",
-    default=Path("DB/diabetes_012_health_indicators_BRFSS2015.csv"),
-    help="Caminho do CSV original",
-)
+        "entrada",
+        type=Path,
+        nargs="?",
+        default=Path("DB/diabetes_012_health_indicators_BRFSS2015.csv"),
+        help="Caminho do CSV original",
+    )
     parser.add_argument(
         "--saida-dir", type=Path, default=Path("DB/dados_tratados"),
         help="Pasta de saída (padrão: DB/dados_tratados)",
@@ -210,8 +239,8 @@ def argumentos() -> argparse.Namespace:
         help="Remove atributos com variância até este valor (padrão: 0)",
     )
     parser.add_argument(
-        "--contaminacao", type=interpretar_contaminacao, default="auto",
-        help="Proporção esperada de outliers ou 'auto' (padrão: auto)",
+        "--percentil-bmi", type=interpretar_percentil, default=99.5,
+        help="Percentil simétrico usado como teto/piso do BMI (padrão: 99.5)",
     )
     return parser.parse_args()
 
@@ -220,7 +249,7 @@ def main() -> int:
     args = argumentos()
     try:
         executar_tratamento(
-            args.entrada, args.saida_dir, args.limite_variancia, args.contaminacao
+            args.entrada, args.saida_dir, args.limite_variancia, args.percentil_bmi
         )
     except (FileNotFoundError, ValueError, pd.errors.ParserError) as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
