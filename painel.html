@@ -137,21 +137,18 @@
   <section id="escolha-k">
     <h2>Escolha do número de clusters</h2>
     <p class="section-intro">
-      Testamos k de 2 a 7. A inércia (soma das distâncias ao centróide) sempre
-      cai conforme k aumenta — o corte usado é o ponto em que ela para de cair
-      de forma acentuada. O silhouette mede o quão bem separados os grupos
-      ficam; escolhemos o k com maior silhouette.
+      Testamos k de 2 a 7. Para facilitar a leitura, cada valor de k aparece como uma barra horizontal. A inércia apoia o método do cotovelo; o silhouette mede a separação média dos grupos.
     </p>
     <div class="chart-row">
       <div class="chart-box">
         <h3>Inércia por k</h3>
         <div class="sub">método do cotovelo</div>
-        <svg viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, Arial, sans-serif"><line x1="50" y1="16.0" x2="366" y2="16.0" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="19.0" font-size="10" fill="#5C6B7A" text-anchor="end">3,4 mi</text><line x1="50" y1="73.4" x2="366" y2="73.4" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="76.4" font-size="10" fill="#5C6B7A" text-anchor="end">3,0 mi</text><line x1="50" y1="130.8" x2="366" y2="130.8" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="133.8" font-size="10" fill="#5C6B7A" text-anchor="end">2,6 mi</text><line x1="50" y1="190.0" x2="366" y2="190.0" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="193.0" font-size="10" fill="#5C6B7A" text-anchor="end">2,1 mi</text><path d="M50.0,32.8 L113.2,76.2 L176.4,106.2 L239.6,144.0 L302.8,155.1 L366.0,173.2" fill="none" stroke="#16232E" stroke-width="2.2"/><circle cx="50.0" cy="32.8" r="3.4" fill="#16232E"/><text x="50.0" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">2</text><circle cx="113.2" cy="76.2" r="3.4" fill="#16232E"/><text x="113.2" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">3</text><circle cx="176.4" cy="106.2" r="3.4" fill="#16232E"/><text x="176.4" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">4</text><circle cx="239.6" cy="144.0" r="3.4" fill="#16232E"/><text x="239.6" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">5</text><circle cx="302.8" cy="155.1" r="3.4" fill="#16232E"/><text x="302.8" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">6</text><circle cx="366.0" cy="173.2" r="3.4" fill="#16232E"/><text x="366.0" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">7</text></svg>
+        <svg viewBox="0 0 520 331" xmlns="http://www.w3.org/2000/svg"><line x1="72.0" y1="18" x2="72.0" y2="301" stroke="#D9E0E5"/><text x="72.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0</text><line x1="166.5" y1="18" x2="166.5" y2="301" stroke="#D9E0E5"/><text x="166.5" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">884 mil</text><line x1="261.0" y1="18" x2="261.0" y2="301" stroke="#D9E0E5"/><text x="261.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">1,8 mi</text><line x1="355.5" y1="18" x2="355.5" y2="301" stroke="#D9E0E5"/><text x="355.5" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">2,7 mi</text><line x1="450.0" y1="18" x2="450.0" y2="301" stroke="#D9E0E5"/><text x="450.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">3,5 mi</text><text x="60" y="45.4" font-size="11" fill="#16232E" text-anchor="end">k = 2</text><rect x="72" y="27.4" width="350.0" height="23.6" rx="3" fill="#16232E"/><text x="430.0" y="45.4" font-size="11" fill="#16232E" font-weight="600">3,3 mi</text><text x="60" y="92.5" font-size="11" fill="#16232E" text-anchor="end">k = 3</text><rect x="72" y="74.6" width="315.3" height="23.6" rx="3" fill="#16232E"/><text x="395.3" y="92.5" font-size="11" fill="#16232E" font-weight="600">3,0 mi</text><text x="60" y="139.7" font-size="11" fill="#16232E" text-anchor="end">k = 4</text><rect x="72" y="121.8" width="291.4" height="23.6" rx="3" fill="#16232E"/><text x="371.4" y="139.7" font-size="11" fill="#16232E" font-weight="600">2,7 mi</text><text x="60" y="186.9" font-size="11" fill="#16232E" text-anchor="end">k = 5</text><rect x="72" y="168.9" width="261.2" height="23.6" rx="3" fill="#16232E"/><text x="341.2" y="186.9" font-size="11" fill="#16232E" font-weight="600">2,4 mi</text><text x="60" y="234.0" font-size="11" fill="#16232E" text-anchor="end">k = 6</text><rect x="72" y="216.1" width="252.3" height="23.6" rx="3" fill="#16232E"/><text x="332.3" y="234.0" font-size="11" fill="#16232E" font-weight="600">2,4 mi</text><text x="60" y="281.2" font-size="11" fill="#16232E" text-anchor="end">k = 7</text><rect x="72" y="263.3" width="237.9" height="23.6" rx="3" fill="#16232E"/><text x="317.9" y="281.2" font-size="11" fill="#16232E" font-weight="600">2,2 mi</text></svg>
       </div>
       <div class="chart-box">
         <h3>Coeficiente de silhouette por k</h3>
         <div class="sub">separação entre clusters</div>
-        <svg viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, Arial, sans-serif"><line x1="50" y1="16.0" x2="366" y2="16.0" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="19.0" font-size="10" fill="#5C6B7A" text-anchor="end">0,31</text><line x1="50" y1="73.4" x2="366" y2="73.4" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="76.4" font-size="10" fill="#5C6B7A" text-anchor="end">0,24</text><line x1="50" y1="130.8" x2="366" y2="130.8" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="133.8" font-size="10" fill="#5C6B7A" text-anchor="end">0,18</text><line x1="50" y1="190.0" x2="366" y2="190.0" stroke="#D9E0E5" stroke-width="1"/><text x="42" y="193.0" font-size="10" fill="#5C6B7A" text-anchor="end">0,11</text><path d="M50.0,102.9 L113.2,32.8 L176.4,173.2 L239.6,152.3 L302.8,152.3 L366.0,169.0" fill="none" stroke="#B23A2E" stroke-width="2.2"/><circle cx="50.0" cy="102.9" r="3.4" fill="#B23A2E"/><text x="50.0" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">2</text><circle cx="113.2" cy="32.8" r="3.4" fill="#B23A2E"/><text x="113.2" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">3</text><circle cx="176.4" cy="173.2" r="3.4" fill="#B23A2E"/><text x="176.4" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">4</text><circle cx="239.6" cy="152.3" r="3.4" fill="#B23A2E"/><text x="239.6" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">5</text><circle cx="302.8" cy="152.3" r="3.4" fill="#B23A2E"/><text x="302.8" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">6</text><circle cx="366.0" cy="169.0" r="3.4" fill="#B23A2E"/><text x="366.0" y="212" font-size="10" fill="#5C6B7A" text-anchor="middle">7</text></svg>
+        <svg viewBox="0 0 520 331" xmlns="http://www.w3.org/2000/svg"><line x1="72.0" y1="18" x2="72.0" y2="301" stroke="#D9E0E5"/><text x="72.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0,00</text><line x1="166.5" y1="18" x2="166.5" y2="301" stroke="#D9E0E5"/><text x="166.5" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0,08</text><line x1="261.0" y1="18" x2="261.0" y2="301" stroke="#D9E0E5"/><text x="261.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0,16</text><line x1="355.5" y1="18" x2="355.5" y2="301" stroke="#D9E0E5"/><text x="355.5" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0,24</text><line x1="450.0" y1="18" x2="450.0" y2="301" stroke="#D9E0E5"/><text x="450.0" y="322" font-size="10" fill="#5C6B7A" text-anchor="middle">0,31</text><text x="60" y="45.4" font-size="11" fill="#16232E" text-anchor="end">k = 2</text><rect x="72" y="27.4" width="253.0" height="23.6" rx="3" fill="#B23A2E"/><text x="333.0" y="45.4" font-size="11" fill="#16232E" font-weight="600">0,21</text><text x="60" y="92.5" font-size="11" fill="#16232E" text-anchor="end">k = 3</text><rect x="72" y="74.6" width="350.0" height="23.6" rx="3" fill="#B23A2E"/><text x="430.0" y="92.5" font-size="11" fill="#16232E" font-weight="600">0,29</text><text x="60" y="139.7" font-size="11" fill="#16232E" text-anchor="end">k = 4</text><rect x="72" y="121.8" width="155.7" height="23.6" rx="3" fill="#B23A2E"/><text x="235.7" y="139.7" font-size="11" fill="#16232E" font-weight="600">0,13</text><text x="60" y="186.9" font-size="11" fill="#16232E" text-anchor="end">k = 5</text><rect x="72" y="168.9" width="184.6" height="23.6" rx="3" fill="#B23A2E"/><text x="264.6" y="186.9" font-size="11" fill="#16232E" font-weight="600">0,15</text><text x="60" y="234.0" font-size="11" fill="#16232E" text-anchor="end">k = 6</text><rect x="72" y="216.1" width="184.6" height="23.6" rx="3" fill="#B23A2E"/><text x="264.6" y="234.0" font-size="11" fill="#16232E" font-weight="600">0,15</text><text x="60" y="281.2" font-size="11" fill="#16232E" text-anchor="end">k = 7</text><rect x="72" y="263.3" width="161.5" height="23.6" rx="3" fill="#B23A2E"/><text x="241.5" y="281.2" font-size="11" fill="#16232E" font-weight="600">0,13</text></svg>
       </div>
     </div>
     <div class="k-note">k escolhido: <b>3</b> — maior silhouette entre os valores testados, em uma região onde a curva de inércia também perde inclinação (o "cotovelo").</div>
@@ -186,6 +183,68 @@
         <div><b>26,5</b><span>IMC médio</span></div>
         <div><b>8,4%</b><span>pressão alta</span></div>
         <div><b>20,4%</b><span>colesterol alto</span></div>
+        <div><b>33,3%</b><span>fumantes</span></div>
+      </div>
+      <div class="risk">
+        <div class="pct" style="color:#B23A2E">1,8%</div>
+        <div class="lbl">doença cardíaca</div>
+      </div>
+    </div>
+    <div class="profile-card" style="border-left-color:#2E7D6B">
+      <div class="id">
+        <div class="name">Cluster 2</div>
+        <div class="size">88.727 pessoas · 35,0% da base</div>
+      </div>
+      <div class="traits">
+        <div><b>Sem diabetes</b><span>diabetes</span></div>
+        <div><b>65–69</b><span>faixa etária</span></div>
+        <div><b>29,3</b><span>IMC médio</span></div>
+        <div><b>77,6%</b><span>pressão alta</span></div>
+        <div><b>62,6%</b><span>colesterol alto</span></div>
+        <div><b>56,6%</b><span>fumantes</span></div>
+      </div>
+      <div class="risk">
+        <div class="pct" style="color:#2E7D6B">14,8%</div>
+        <div class="lbl">doença cardíaca</div>
+      </div>
+    </div>
+    <div class="profile-card" style="border-left-color:#1F3A5F">
+      <div class="id">
+        <div class="name">Cluster 0</div>
+        <div class="size">39.965 pessoas · 15,8% da base</div>
+      </div>
+      <div class="traits">
+        <div><b>Diabetes</b><span>diabetes</span></div>
+        <div><b>65–69</b><span>faixa etária</span></div>
+        <div><b>31,7</b><span>IMC médio</span></div>
+        <div><b>73,9%</b><span>pressão alta</span></div>
+        <div><b>66,5%</b><span>colesterol alto</span></div>
+        <div><b>51,5%</b><span>fumantes</span></div>
+      </div>
+      <div class="risk">
+        <div class="pct" style="color:#1F3A5F">21,4%</div>
+        <div class="lbl">doença cardíaca</div>
+      </div>
+    </div></div>
+  </section>
+
+  <section id="prevalencia">
+    <h2>Prevalência de doença cardíaca por cluster</h2>
+    <p class="section-intro">
+      A linha tracejada marca a prevalência geral da base. Nenhum cluster usou
+      essa variável para se formar — ela entra só depois, para validar se a
+      segmentação captura algo relevante para o problema.
+    </p>
+    <div class="bar-box"><svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg"><line x1="46" y1="246.0" x2="740" y2="246.0" stroke="#D9E0E5"/><text x="38" y="249.0" font-size="10" fill="#5C6B7A" text-anchor="end">0%</text><line x1="46" y1="131.0" x2="740" y2="131.0" stroke="#D9E0E5"/><text x="38" y="134.0" font-size="10" fill="#5C6B7A" text-anchor="end">13%</text><line x1="46" y1="16.0" x2="740" y2="16.0" stroke="#D9E0E5"/><text x="38" y="19.0" font-size="10" fill="#5C6B7A" text-anchor="end">25%</text><rect x="83.0" y="51.1" width="157.3" height="194.9" fill="#1F3A5F" rx="2"/><text x="161.7" y="45.1" font-size="11" fill="#16232E" text-anchor="middle" font-weight="600">21,4%</text><text x="161.7" y="270" font-size="10.5" fill="#5C6B7A" text-anchor="middle">Cluster 0</text><rect x="314.3" y="229.6" width="157.3" height="16.4" fill="#B23A2E" rx="2"/><text x="393.0" y="223.6" font-size="11" fill="#16232E" text-anchor="middle" font-weight="600">1,8%</text><text x="393.0" y="270" font-size="10.5" fill="#5C6B7A" text-anchor="middle">Cluster 1</text><rect x="545.7" y="111.4" width="157.3" height="134.6" fill="#2E7D6B" rx="2"/><text x="624.3" y="105.4" font-size="11" fill="#16232E" text-anchor="middle" font-weight="600">14,8%</text><text x="624.3" y="270" font-size="10.5" fill="#5C6B7A" text-anchor="middle">Cluster 2</text><line x1="46" y1="160.1" x2="740" y2="160.1" stroke="#5C6B7A" stroke-width="1.4" stroke-dasharray="5,4"/><text x="740" y="154.1" font-size="10" fill="#5C6B7A" text-anchor="end">média geral: 9,4%</text></svg></div>
+  </section>
+
+  <footer>
+    Dataset: <a href="https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset" target="_blank" rel="noopener">Diabetes Health Indicators (BRFSS 2015)</a>, via Kaggle.
+    Pipeline: tratamento.py → pre_processamento.py → analise_clusters.py → gerar_painel.py.
+  </footer>
+</div>
+</body>
+</html>
         <div><b>33,3%</b><span>fumantes</span></div>
       </div>
       <div class="risk">
