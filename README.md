@@ -17,7 +17,7 @@ dados_tratados: dataset pós tratamento, com alguns arquivos úteis de análise.
 #### Pipeline para limpeza de dados e exibição da página de análises: 
 
 1. Abrir o repositório contendo os códigos em um terminal
-2. Executar python processamento.py
+2. Executar python tratamento.py
 3. Executar python pre_processamento.py
 4. Executar python analise_clusters.py
 5. Executar python gerar_painel.py
