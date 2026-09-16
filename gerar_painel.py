@@ -1,23 +1,26 @@
-
 """
-Gera o painel HTML do projeto a partir de dados_clusters.json.
+Gera o painel HTML a partir de dados_graficos.json.
 
-O painel é autocontido: os gráficos são SVG gerados em Python e não dependem
- de bibliotecas JavaScript externas.
+O HTML é autocontido e desenha os gráficos em SVG, sem bibliotecas JS externas.
+
+Dependências:
+    apenas Python padrão nesta etapa.
 """
 
 from __future__ import annotations
 
+import argparse
 import html
 import json
 from pathlib import Path
 
-PASTA_DADOS = Path("DB/dados_tratados")
 CORES = ["#1F3A5F", "#B23A2E", "#2E7D6B", "#C98A2C", "#6B4C9A", "#3D8FB5"]
 INK = "#16232E"
 MUTED = "#5C6B7A"
 LINE = "#D9E0E5"
 SOFT = "#F1DCD8"
+BG = "#EFF2F5"
+SURFACE = "#FFFFFF"
 
 
 def fmt(v, casas=1):
@@ -28,440 +31,200 @@ def fmt_inteiro(v):
     return f"{int(v):,}".replace(",", ".")
 
 
-def fmt_compacto(v):
-    v = float(v)
-    if abs(v) >= 1_000_000:
-        return f"{v / 1_000_000:.1f}".replace(".", ",") + " mi"
-    if abs(v) >= 1_000:
-        return f"{v / 1_000:.0f}" + " mil"
-    return f"{v:.0f}"
+def barras_grupo_svg(dados: list[dict], largura: int = 800, altura: int = 380, maxv: float = 100.0) -> str:
+    """Barras horizontais agrupadas: duas barras (mulher/homem) por métrica.
 
-
-def fmt_numero(v, casas=2):
-    return f"{float(v):.{casas}f}".replace(".", ",")
-
-
-# ---------------------------------------------------------------------------
-# SVG
-
-
-def barras_metricas_svg(categorias, valores, cor, largura=520, altura=None, formatador=fmt_compacto):
-    """Barras horizontais para comparar uma métrica discreta por valor de k.
-
-    Usado na seleção do número de clusters. Não há linhas de tendência: cada
-    valor de k é representado por uma barra independente.
+    A legenda no topo identifica as cores. Não repetimos “Mulher/Homem”
+    ao lado de cada barra, evitando sobreposição visual com os nomes dos
+    indicadores, especialmente nos rótulos mais longos.
     """
-    n = max(1, len(categorias))
-    altura = altura or max(250, 46 * n + 55)
-    m = {"l": 72, "r": 70, "t": 18, "b": 30}
+    n = len(dados)
+    m = {"l": 245, "r": 65, "t": 28, "b": 34}
     pw = largura - m["l"] - m["r"]
     ph = altura - m["t"] - m["b"]
-    passo = ph / n
-    maxv = max(max((float(v) for v in valores), default=0.0), 0.0)
-    vmax = maxv * 1.08 if maxv else 1.0
-
-    partes = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
-    for frac in (0, 0.25, 0.5, 0.75, 1.0):
+    passo = ph / max(1, n)
+    bar_h = min(14, passo * 0.22)
+    gap = max(4, bar_h * 0.35)
+    cores = {0: "#B23A2E", 1: "#1F3A5F"}
+    out = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
+    for frac in (0, .25, .5, .75, 1):
         x = m["l"] + pw * frac
-        valor = vmax * frac
-        partes.append(
-            f'<line x1="{x:.1f}" y1="{m["t"]}" x2="{x:.1f}" y2="{altura-m["b"]}" '
-            f'stroke="{LINE}"/>'
-        )
-        partes.append(
-            f'<text x="{x:.1f}" y="{altura-9}" font-size="10" fill="{MUTED}" '
-            f'text-anchor="middle">{html.escape(formatador(valor))}</text>'
-        )
+        out.append(f'<line x1="{x:.1f}" y1="{m["t"]}" x2="{x:.1f}" y2="{altura-m["b"]}" stroke="{LINE}"/>')
+        out.append(f'<text x="{x:.1f}" y="{altura-10}" font-size="10" fill="{MUTED}" text-anchor="middle">{fmt(maxv*frac,0)}%</text>')
 
-    for i, (cat, val) in enumerate(zip(categorias, valores)):
-        y = m["t"] + i * passo + passo * 0.20
-        bh = passo * 0.50
-        bw = pw * (float(val) / vmax) if vmax else 0
-        partes.append(
-            f'<text x="{m["l"]-12}" y="{y+bh*0.76:.1f}" font-size="11" '
-            f'fill="{INK}" text-anchor="end">k = {html.escape(str(cat))}</text>'
-        )
-        partes.append(
-            f'<rect x="{m["l"]}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" '
-            f'rx="3" fill="{cor}"/>'
-        )
-        partes.append(
-            f'<text x="{m["l"]+bw+8:.1f}" y="{y+bh*0.76:.1f}" font-size="11" '
-            f'fill="{INK}" font-weight="600">{html.escape(formatador(float(val)))}</text>'
-        )
+    # Legenda única do gráfico: vermelho = Mulher; azul = Homem.
+    out.append(f'<rect x="{largura-180}" y="4" width="10" height="10" rx="2" fill="{cores[0]}"/><text x="{largura-164}" y="13" font-size="11" fill="{MUTED}">Mulher</text>')
+    out.append(f'<rect x="{largura-96}" y="4" width="10" height="10" rx="2" fill="{cores[1]}"/><text x="{largura-80}" y="13" font-size="11" fill="{MUTED}">Homem</text>')
 
-    partes.append("</svg>")
-    return "".join(partes)
+    for i, item in enumerate(dados):
+        y0 = m["t"] + i * passo + passo * .16
+        grupo_h = 2 * bar_h + gap
+        # Rótulo do indicador centralizado verticalmente entre as duas barras.
+        label_y = y0 + grupo_h / 2 + 4
+        out.append(f'<text x="{m["l"]-14}" y="{label_y:.1f}" font-size="11" fill="{INK}" text-anchor="end">{html.escape(item["nome"])}</text>')
+        for j, val in enumerate(item["valores"]):
+            y = y0 + j * (bar_h + gap)
+            bw = pw * float(val["percentual"]) / maxv
+            out.append(f'<rect x="{m["l"]}" y="{y:.1f}" width="{bw:.1f}" height="{bar_h:.1f}" rx="3" fill="{cores[val["sex"]]}"/>')
+            out.append(f'<text x="{m["l"]+bw+7:.1f}" y="{y+bar_h*0.82:.1f}" font-size="10.5" fill="{INK}" font-weight="600">{fmt(val["percentual"])}%</text>')
+    out.append("</svg>")
+    return "".join(out)
 
 
-
-def barras_horizontais_svg(categorias, valores, cores, largura=760, altura=None, titulo_eixo="Percentual"):
-    """Gráfico categórico horizontal; cada categoria tem sua própria linha."""
-    n = max(1, len(categorias))
-    altura = altura or max(220, 58 * n + 50)
-    m = {"l": 190, "r": 70, "t": 20, "b": 28}
-    pw, ph = largura - m["l"] - m["r"], altura - m["t"] - m["b"]
-    passo = ph / n
-    maxv = max(max(valores, default=0), 1)
-    vmax = 100 if maxv <= 100 else maxv * 1.1
-
-    partes = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
-    for frac in (0, 0.25, 0.5, 0.75, 1.0):
-        x = m["l"] + pw * frac
-        valor = vmax * frac
-        partes.append(f'<line x1="{x:.1f}" y1="{m["t"]}" x2="{x:.1f}" y2="{altura-m["b"]}" stroke="{LINE}"/>')
-        partes.append(f'<text x="{x:.1f}" y="{altura-8}" font-size="10" fill="{MUTED}" text-anchor="middle">{fmt(valor, 0)}%</text>')
-
-    for i, (cat, val) in enumerate(zip(categorias, valores)):
-        y = m["t"] + i * passo + passo * 0.22
-        bh = passo * 0.48
-        bw = pw * (float(val) / vmax)
-        cor = cores[i % len(cores)]
-        partes.append(f'<text x="{m["l"]-12}" y="{y+bh*0.78:.1f}" font-size="11" fill="{INK}" text-anchor="end">{html.escape(str(cat))}</text>')
-        partes.append(f'<rect x="{m["l"]}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" rx="3" fill="{cor}"/>')
-        partes.append(f'<text x="{m["l"]+bw+8:.1f}" y="{y+bh*0.78:.1f}" font-size="11" fill="{INK}" font-weight="600">{fmt(val)}%</text>')
-
-    partes.append(f'<text x="{m["l"]+pw/2:.1f}" y="{altura-8}" font-size="0" fill="{MUTED}">{html.escape(titulo_eixo)}</text>')
-    partes.append("</svg>")
-    return "".join(partes)
-
-
-def prevalencia_cluster_svg(perfis, media, largura=760, altura=300):
-    categorias = [f"Cluster {p['cluster']}" for p in perfis]
-    valores = [p["prevalencia_doenca_cardiaca_pct"] for p in perfis]
-    cores = [CORES[p["cluster"] % len(CORES)] for p in perfis]
-    maxv = max(max(valores, default=0), media) * 1.25 or 1
-    m = {"l": 150, "r": 90, "t": 20, "b": 40}
+def heatmap_svg(heat: dict, minimo: float, maximo: float, formato: str, largura: int = 820, altura: int = 360) -> str:
+    linhas, colunas, valores = heat["linhas"], heat["colunas"], heat["valores"]
+    m = {"l": 150, "r": 30, "t": 48, "b": 58}
     pw = largura - m["l"] - m["r"]
-    passo = (altura - m["t"] - m["b"]) / max(1, len(categorias))
-    partes = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
-    x_media = m["l"] + pw * media / maxv
-    partes.append(f'<line x1="{x_media:.1f}" y1="{m["t"]}" x2="{x_media:.1f}" y2="{altura-m["b"]}" stroke="{MUTED}" stroke-dasharray="5,4" stroke-width="1.4"/>')
-    partes.append(f'<text x="{x_media:.1f}" y="{m["t"]-5}" font-size="10" fill="{MUTED}" text-anchor="middle">média {fmt(media)}%</text>')
-    for i, (cat, val, cor) in enumerate(zip(categorias, valores, cores)):
-        y = m["t"] + i * passo + passo * 0.18
-        bh = passo * 0.58
-        bw = pw * val / maxv
-        partes.append(f'<text x="{m["l"]-12}" y="{y+bh*0.72:.1f}" font-size="11" fill="{INK}" text-anchor="end">{cat}</text>')
-        partes.append(f'<rect x="{m["l"]}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" rx="3" fill="{cor}"/>')
-        partes.append(f'<text x="{m["l"]+bw+8:.1f}" y="{y+bh*0.72:.1f}" font-size="11" fill="{INK}" font-weight="600">{fmt(val)}%</text>')
-    partes.append("</svg>")
-    return "".join(partes)
+    ph = altura - m["t"] - m["b"]
+    cw = pw / len(colunas)
+    ch = ph / len(linhas)
+    span = maximo - minimo if maximo != minimo else 1
+
+    def interp(v: float) -> str:
+        # Escala neutra azul -> vermelho construída manualmente para SVG.
+        t = max(0.0, min(1.0, (v - minimo) / span))
+        r = int(232 * t + 45 * (1-t))
+        g = int(102 * (1-t) + 73 * t)
+        b = int(173 * (1-t) + 117 * t)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    out = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
+    for j, col in enumerate(colunas):
+        x = m["l"] + j * cw + cw / 2
+        out.append(f'<text x="{x:.1f}" y="{m["t"]-18}" font-size="10.5" fill="{MUTED}" text-anchor="middle">{html.escape(col["label"])}</text>')
+    for i, row in enumerate(linhas):
+        y = m["t"] + i * ch + ch / 2
+        out.append(f'<text x="{m["l"]-10}" y="{y+4:.1f}" font-size="10.5" fill="{MUTED}" text-anchor="end">{html.escape(row["label"])}</text>')
+        for j, _col in enumerate(colunas):
+            valor = valores[i][j]
+            x = m["l"] + j * cw
+            yy = m["t"] + i * ch
+            cor = "#ECEFF1" if valor is None else interp(valor)
+            out.append(f'<rect x="{x:.1f}" y="{yy:.1f}" width="{cw-2:.1f}" height="{ch-2:.1f}" rx="3" fill="{cor}"/>')
+            if valor is not None:
+                texto = f"{valor:.1f}%" if formato == "pct" else f"{valor:.2f}"
+                text_color = "#FFFFFF" if (valor-minimo)/span > 0.58 else INK
+                out.append(f'<text x="{x+cw/2:.1f}" y="{yy+ch/2+4:.1f}" font-size="9.5" fill="{text_color}" text-anchor="middle" font-weight="600">{texto}</text>')
+    out.append(f'<text x="{m["l"]+pw/2:.1f}" y="{altura-8}" font-size="10" fill="{MUTED}" text-anchor="middle">Faixas de renda (1 = menor · 8 = maior)</text>')
+    out.append("</svg>")
+    return "".join(out)
 
 
-def dispersao_svg(pontos, cores, largura=760, altura=380):
-    m = {"l": 44, "r": 20, "t": 16, "b": 34}
-    pw, ph = largura - m["l"] - m["r"], altura - m["t"] - m["b"]
-    xs = [p["x"] for p in pontos] or [0]
-    ys = [p["y"] for p in pontos] or [0]
-    xmin, xmax = min(xs), max(xs)
-    ymin, ymax = min(ys), max(ys)
-    fx, fy = (xmax - xmin) * 0.06 or 1, (ymax - ymin) * 0.06 or 1
-    xmin, xmax, ymin, ymax = xmin - fx, xmax + fx, ymin - fy, ymax + fy
-
-    def px(v): return m["l"] + (v - xmin) / (xmax - xmin) * pw
-    def py(v): return m["t"] + ph - (v - ymin) / (ymax - ymin) * ph
-
-    partes = [f'<svg viewBox="0 0 {largura} {altura}" xmlns="http://www.w3.org/2000/svg">']
-    partes.append(f'<line x1="{m["l"]}" y1="{m["t"]}" x2="{m["l"]}" y2="{m["t"]+ph}" stroke="{LINE}"/>')
-    partes.append(f'<line x1="{m["l"]}" y1="{m["t"]+ph}" x2="{m["l"]+pw}" y2="{m["t"]+ph}" stroke="{LINE}"/>')
-    partes.append(f'<text x="{m["l"]+pw/2}" y="{altura-6}" font-size="11" fill="{MUTED}" text-anchor="middle">Componente 1</text>')
-    partes.append(f'<text x="14" y="{m["t"]+ph/2}" font-size="11" fill="{MUTED}" text-anchor="middle" transform="rotate(-90 14 {m["t"]+ph/2})">Componente 2</text>')
-    for p in pontos:
-        cor = cores[p["cluster"] % len(cores)]
-        partes.append(f'<circle cx="{px(p["x"]):.1f}" cy="{py(p["y"]):.1f}" r="2.6" fill="{cor}" fill-opacity="0.55"/>')
-    partes.append("</svg>")
-    return "".join(partes)
+def narrativa_grafico1(res: dict) -> str:
+    d = res
+    return (
+        f"Na amostra, a taxa observada de doença cardíaca/ataque cardíaco é {fmt(d['taxa_cardiaca_mulher'])}% entre mulheres e {fmt(d['taxa_cardiaca_homem'])}% entre homens. "
+        f"O gráfico coloca esse desfecho lado a lado com tabagismo ({fmt(d['tabagismo_mulher'])}% vs. {fmt(d['tabagismo_homem'])}%), consumo elevado de álcool ({fmt(d['alcool_mulher'])}% vs. {fmt(d['alcool_homem'])}%) e ausência de atividade física ({fmt(d['sedentarismo_mulher'])}% vs. {fmt(d['sedentarismo_homem'])}%). "
+        "O objetivo é verificar se as diferenças de comportamento acompanham as diferenças observadas no evento cardíaco; o gráfico, isoladamente, não identifica a causa da diferença."
+    )
 
 
-# ---------------------------------------------------------------------------
-# HTML helpers
+def narrativa_grafico2(res: dict) -> str:
+    return (
+        f"A verificação de colesterol ocorreu em {fmt(res['cholcheck_mulher'])}% das mulheres e {fmt(res['cholcheck_homem'])}% dos homens. "
+        f"A cobertura de saúde é de {fmt(res['cobertura_mulher'])}% e {fmt(res['cobertura_homem'])}%, respectivamente. "
+        f"Já a proporção que relatou deixar de ir ao médico por causa do custo é de {fmt(res['barreira_custo_mulher'])}% entre mulheres e {fmt(res['barreira_custo_homem'])}% entre homens. "
+        "Essas diferenças permitem discutir prevenção e acesso sem transformar uma associação observacional em julgamento de comportamento individual."
+    )
 
 
-def card_perfil(p: dict) -> str:
-    cor = CORES[p["cluster"] % len(CORES)]
-    return f"""
-    <article class="profile-card" style="border-left-color:{cor}">
-      <div>
-        <div class="profile-name">Cluster {p['cluster']}</div>
-        <div class="muted">{fmt_inteiro(p['tamanho'])} registros · {fmt(p['percentual_do_total'])}% da base</div>
-      </div>
-      <div class="trait-grid">
-        <div><strong>{html.escape(p['diabetes_predominante'])}</strong><span>diabetes predominante</span></div>
-        <div><strong>{html.escape(p['faixa_etaria_predominante'])}</strong><span>faixa etária predominante</span></div>
-        <div><strong>{fmt(p['bmi_medio'])}</strong><span>IMC médio</span></div>
-        <div><strong>{fmt(p['pct_pressao_alta'])}%</strong><span>pressão alta</span></div>
-        <div><strong>{fmt(p['pct_colesterol_alto'])}%</strong><span>colesterol alto</span></div>
-        <div><strong>{fmt(p['pct_fumante'])}%</strong><span>fumantes</span></div>
-        <div><strong>{fmt(p['pct_dificuldade_caminhar'])}%</strong><span>dificuldade para caminhar</span></div>
-        <div><strong>{fmt(p['pct_atividade_fisica'])}%</strong><span>atividade física</span></div>
-        <div><strong>{html.escape(p['saude_geral_predominante'])}</strong><span>saúde geral predominante</span></div>
-      </div>
-      <div class="risk"><strong>{fmt(p['prevalencia_doenca_cardiaca_pct'])}%</strong><span>doença cardíaca observada</span></div>
-    </article>"""
+def narrativa_grafico3(res: dict) -> str:
+    return (
+        f"Entre a menor e a maior faixa de renda, a média de GenHlth varia de {fmt(res['genhlth_renda_menor'],2)} para {fmt(res['genhlth_renda_maior'],2)} e a prevalência observada de diabetes varia de {fmt(res['diabetes_renda_menor_pct'],1)}% para {fmt(res['diabetes_renda_maior_pct'],1)}%. "
+        f"Por escolaridade, GenHlth varia de {fmt(res['genhlth_educacao_menor'],2)} para {fmt(res['genhlth_educacao_maior'],2)} e o diabetes de {fmt(res['diabetes_educacao_menor_pct'],1)}% para {fmt(res['diabetes_educacao_maior_pct'],1)}%. "
+        "Como GenHlth é codificada de 1 (excelente) a 5 (ruim), valores maiores representam pior saúde percebida. As células do heatmap mostram onde esses padrões se concentram, mas não provam causalidade."
+    )
 
 
-def tabela_associacoes(registros: list[dict]) -> str:
-    linhas = []
-    for r in registros:
-        sinal = "+" if r["diferenca_pontos_percentuais"] >= 0 else ""
-        linhas.append(
-            f"<tr><td>{html.escape(r['nome'])}</td>"
-            f"<td>{fmt(r['prevalencia_com_indicador_pct'])}%</td>"
-            f"<td>{fmt(r['prevalencia_sem_indicador_pct'])}%</td>"
-            f"<td>{sinal}{fmt(r['diferenca_pontos_percentuais'])} p.p.</td>"
-            f"<td>{fmt_inteiro(r['n_com_indicador'])}</td><td>{fmt_inteiro(r['n_sem_indicador'])}</td></tr>"
-        )
-    return "".join(linhas)
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dados", type=Path, default=Path("DB/dados_tratados/dados_graficos.json"))
+    parser.add_argument("--saida", type=Path, default=Path("DB/dados_tratados/painel.html"))
+    args = parser.parse_args()
+    dados = json.loads(args.dados.read_text(encoding="utf-8"))
+    g1 = dados["graficos"]["genero_riscos"]
+    g2 = dados["graficos"]["prevencao_barreira"]
+    g3 = dados["graficos"]["socioeconomico"]
 
-
-def tabela_variaveis(variaveis: dict) -> str:
-    linhas = []
-    for coluna, info in variaveis.items():
-        linhas.append(
-            f"<tr><td><code>{html.escape(coluna)}</code></td>"
-            f"<td>{html.escape(str(info.get('nome', coluna)))}</td>"
-            f"<td>{html.escape(str(info.get('tipo', '—')))}</td>"
-            f"<td>{html.escape(str(info.get('papel', '—')))}</td>"
-            f"<td>{html.escape(str(info.get('descricao', '—')))}</td></tr>"
-        )
-    return "".join(linhas)
-
-
-def card_indicador(nome: str, valor: str, legenda: str) -> str:
-    return f'<div class="kpi"><div class="kpi-value">{valor}</div><div class="kpi-label">{html.escape(nome)}</div><div class="kpi-note">{html.escape(legenda)}</div></div>'
-
-
-# ---------------------------------------------------------------------------
-# Construção
-
-
-def main() -> None:
-    caminho_json = PASTA_DADOS / "dados_clusters.json"
-    if not caminho_json.exists():
-        raise FileNotFoundError(
-            f"{caminho_json} não encontrado. Execute analise_clusters.py primeiro."
-        )
-
-    dados = json.loads(caminho_json.read_text(encoding="utf-8"))
-
-    # Dados do painel
-    perfis = sorted(dados["perfis"], key=lambda p: p["prevalencia_doenca_cardiaca_pct"])
-    resumo = dados.get("resumo_base", {})
-    fonte = dados.get("fonte", {})
-    assoc = dados.get("associacoes_descritivas", [])
-    interpretacao = dados.get("interpretacao", {})
-
-    diabetes = resumo.get("diabetes", [])
-    saude = resumo.get("saude_geral", [])
-    idade = resumo.get("faixa_etaria", [])
-    sexo = resumo.get("sexo", [])
-    indicadores = resumo.get("indicadores_binarios", [])
-
-    ks = [r["k"] for r in dados["varredura_k"]]
-    inercias = [r["inercia"] for r in dados["varredura_k"]]
-    silhuetas = [r["silhueta"] for r in dados["varredura_k"]]
-
-    svg_cotovelo = barras_metricas_svg(ks, inercias, INK, formatador=fmt_compacto)
-    svg_silhueta = barras_metricas_svg(ks, silhuetas, "#B23A2E", formatador=lambda v: fmt_numero(v, 2))
-    svg_dispersao = dispersao_svg(dados["pontos_dispersao"], CORES)
-    svg_prev = prevalencia_cluster_svg(perfis, dados["prevalencia_geral_doenca_cardiaca_pct"])
-
-    svg_diabetes = barras_horizontais_svg(
-        [x["categoria"] for x in diabetes], [x["percentual"] for x in diabetes], CORES,
-        titulo_eixo="Distribuição dos respondentes",
-    ) if diabetes else ""
-    svg_saude = barras_horizontais_svg(
-        [x["categoria"] for x in saude], [x["percentual"] for x in saude], CORES,
-        titulo_eixo="Distribuição dos respondentes",
-    ) if saude else ""
-    svg_idade = barras_horizontais_svg(
-        [x["categoria"] for x in idade], [x["percentual"] for x in idade], CORES,
-        titulo_eixo="Distribuição dos respondentes",
-    ) if idade else ""
-    svg_sexo = barras_horizontais_svg(
-        [x["categoria"] for x in sexo], [x["percentual"] for x in sexo], CORES,
-        titulo_eixo="Distribuição dos respondentes",
-    ) if sexo else ""
-
-    indicadores_cat = [x["nome"] for x in indicadores]
-    indicadores_val = [x["percentual_1"] for x in indicadores]
-    svg_indicadores = barras_horizontais_svg(
-        indicadores_cat, indicadores_val, CORES, altura=max(280, 55 * len(indicadores) + 55),
-        titulo_eixo="Percentual com indicador = 1",
-    ) if indicadores else ""
-
-    cards = "".join(card_perfil(p) for p in perfis)
-    linhas_assoc = tabela_associacoes(assoc)
-    linhas_variaveis = tabela_variaveis({
-        "HeartDiseaseorAttack": {"nome": "Doença cardíaca ou ataque cardíaco", "tipo": "alvo binário", "papel": "alvo; não entra no clustering", "descricao": "Desfecho usado somente depois da formação dos clusters para interpretação."},
-        "HighBP": {"nome": "Pressão arterial alta", "tipo": "binária", "papel": "fator clínico associado", "descricao": "Indicador de pressão arterial alta."},
-        "HighChol": {"nome": "Colesterol alto", "tipo": "binária", "papel": "fator clínico associado", "descricao": "Indicador de colesterol alto."},
-        "CholCheck": {"nome": "Verificação de colesterol", "tipo": "binária", "papel": "acompanhamento preventivo", "descricao": "Indicador de verificação de colesterol."},
-        "BMI": {"nome": "Índice de Massa Corporal", "tipo": "contínua", "papel": "característica antropométrica", "descricao": "Medida numérica de IMC."},
-        "Diabetes_012": {"nome": "Diabetes", "tipo": "categórica ordinal", "papel": "condição clínica associada", "descricao": "0 = sem diabetes; 1 = pré-diabetes; 2 = diabetes."},
-        "Smoker": {"nome": "Tabagismo", "tipo": "binária", "papel": "fator comportamental associado", "descricao": "Indicador de tabagismo conforme a codificação da base."},
-        "HvyAlcoholConsump": {"nome": "Consumo elevado de álcool", "tipo": "binária", "papel": "fator comportamental associado", "descricao": "Indicador de consumo elevado de álcool."},
-        "PhysActivity": {"nome": "Atividade física", "tipo": "binária", "papel": "fator comportamental associado", "descricao": "Indicador de prática de atividade física."},
-        "Age": {"nome": "Faixa etária", "tipo": "ordinal", "papel": "característica demográfica", "descricao": "Categorias de idade codificadas de 1 a 13."},
-        "Sex": {"nome": "Sexo", "tipo": "binária", "papel": "característica demográfica", "descricao": "Categoria sexual codificada numericamente."},
-        "Stroke": {"nome": "Histórico de AVC", "tipo": "binária", "papel": "condição clínica associada", "descricao": "Indicador de histórico de AVC."},
-        "GenHlth": {"nome": "Saúde geral percebida", "tipo": "ordinal", "papel": "estado de saúde", "descricao": "Autoavaliação de saúde, de excelente a ruim."},
-        "DiffWalk": {"nome": "Dificuldade para caminhar", "tipo": "binária", "papel": "indicador funcional", "descricao": "Indicador de dificuldade para caminhar ou subir escadas."},
-    })
-
-    total = dados["total_registros"]
-    total_cols = dados.get("total_colunas_tratadas", len(dados.get("features_usadas", [])))
-    pca_pct = round(sum(dados.get("variancia_explicada_pca", [0, 0])) * 100)
-    bmi = resumo.get("bmi", {})
+    # limites para os heatmaps
+    vals1 = [v for row in g3["heatmap_genhlth"]["valores"] for v in row if v is not None]
+    vals2 = [v for row in g3["heatmap_diabetes"]["valores"] for v in row if v is not None]
+    heat1 = heatmap_svg(g3["heatmap_genhlth"], min(vals1), max(vals1), "num")
+    heat2 = heatmap_svg(g3["heatmap_diabetes"], min(vals2), max(vals2), "pct")
+    svg1 = barras_grupo_svg(g1["dados"])
+    svg2 = barras_grupo_svg(g2["dados"], altura=320)
 
     html_final = f'''<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Análise Preditiva e Segmentação de Perfis de Saúde</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Perfil de Saúde e Indicadores Cardiovasculares</title>
 <style>
-:root{{--bg:#EFF2F5;--surface:#fff;--ink:{INK};--muted:{MUTED};--line:{LINE};--accent:#B23A2E;--soft:{SOFT};}}
+:root{{--bg:{BG};--surface:{SURFACE};--ink:{INK};--muted:{MUTED};--line:{LINE};--accent:#B23A2E;--soft:{SOFT};}}
 *{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;line-height:1.55}}
-.wrap{{max-width:1100px;margin:0 auto;padding:0 28px}} header{{padding:62px 0 38px;border-bottom:1px solid var(--line)}}
-h1,h2,h3{{font-family:Georgia,'Times New Roman',serif;font-weight:600;letter-spacing:-.01em}} h1{{font-size:2.55rem;max-width:18ch;margin:0 0 14px}} h2{{font-size:1.6rem;margin:0 0 8px}} h3{{font-size:1.05rem;margin:0 0 6px}}
-.eyebrow{{color:var(--accent);font-weight:700;font-size:.92rem;margin:0 0 12px}} .lede,.section-intro,.muted{{color:var(--muted)}} .lede{{max-width:76ch;font-size:1.06rem}}
-section{{padding:44px 0;border-bottom:1px solid var(--line)}} .section-intro{{max-width:82ch;margin:0 0 24px}}
-.kpi-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}}
-.kpi{{background:var(--surface);padding:20px}} .kpi-value{{font-size:1.55rem;font-weight:700}} .kpi-label{{font-weight:600;margin-top:2px}} .kpi-note{{font-size:.84rem;color:var(--muted);margin-top:5px}}
-.info-grid,.chart-grid,.two-grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .three-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}}
-.box{{background:var(--surface);border:1px solid var(--line);padding:22px}} .box h3{{margin-bottom:12px}} .tag{{display:inline-block;background:var(--soft);padding:4px 8px;border-radius:12px;font-size:.78rem;margin:2px 4px 2px 0}}
-.pipeline{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}} .step{{background:var(--surface);border:1px solid var(--line);padding:16px}} .step b{{display:block;margin-bottom:5px}} .step span{{font-size:.88rem;color:var(--muted)}}
-.note{{margin-top:18px;padding:16px 18px;background:var(--soft);border-left:3px solid var(--accent)}}
-.chart-box svg{{width:100%;height:auto;display:block}} table{{width:100%;border-collapse:collapse;background:var(--surface);font-size:.88rem}} th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}} th{{background:#F7F8FA}} code{{font-family:Consolas,monospace}}
-.profile-list{{display:flex;flex-direction:column;gap:12px}} .profile-card{{background:var(--surface);border:1px solid var(--line);border-left:5px solid;padding:20px;display:grid;grid-template-columns:190px 1fr 150px;gap:20px;align-items:center}} .profile-name{{font:600 1.25rem Georgia,serif}}
-.trait-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}} .trait-grid strong,.risk strong{{display:block;font:600 1.02rem Consolas,monospace}} .trait-grid span,.risk span{{display:block;color:var(--muted);font-size:.78rem}} .risk{{text-align:right}} .risk strong{{font-size:1.7rem;color:var(--accent)}}
-.legend{{font-size:.82rem;color:var(--muted)}} footer{{padding:36px 0 60px;color:var(--muted);font-size:.86rem}} footer a{{color:var(--ink)}}
-@media(max-width:850px){{.kpi-grid,.info-grid,.chart-grid,.two-grid,.three-grid,.pipeline{{grid-template-columns:1fr 1fr}}.profile-card{{grid-template-columns:1fr}}.risk{{text-align:left}}.trait-grid{{grid-template-columns:1fr 1fr}}}}
-@media(max-width:560px){{.wrap{{padding:0 16px}}h1{{font-size:2rem}}.kpi-grid,.info-grid,.chart-grid,.two-grid,.three-grid,.pipeline,.trait-grid{{grid-template-columns:1fr}}}}
+.wrap{{max-width:1120px;margin:0 auto;padding:0 28px}} header{{padding:64px 0 42px;border-bottom:1px solid var(--line)}}
+.eyebrow{{margin:0 0 12px;color:var(--accent);font-weight:700;font-size:.9rem;letter-spacing:.03em}} h1,h2,h3{{font-family:Georgia,'Times New Roman',serif;font-weight:600;letter-spacing:-.01em}} h1{{font-size:2.7rem;max-width:20ch;margin:0 0 14px}} h2{{font-size:1.7rem;margin:0 0 8px}} h3{{font-size:1.05rem;margin:0 0 5px}} .lede,.intro,.muted{{color:var(--muted)}} .lede{{font-size:1.06rem;max-width:82ch}}
+section{{padding:46px 0;border-bottom:1px solid var(--line)}} .box{{background:var(--surface);border:1px solid var(--line);padding:22px}} .chart-wrap{{background:var(--surface);border:1px solid var(--line);padding:18px 20px}} .note{{margin-top:18px;background:var(--soft);border-left:3px solid var(--accent);padding:15px 17px}} .kpi-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:22px}} .kpi{{background:var(--surface);padding:18px}} .kpi b{{display:block;font-size:1.5rem}} .kpi span{{color:var(--muted);font-size:.86rem}}
+.two{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .svg-title{{font-weight:700;margin-bottom:5px}} .legend{{font-size:.82rem;color:var(--muted)}} footer{{padding:34px 0 60px;color:var(--muted);font-size:.84rem}} a{{color:var(--ink)}}
+@media(max-width:860px){{.two,.kpi-grid{{grid-template-columns:1fr}}h1{{font-size:2.2rem}}}}
 </style>
 </head>
 <body><div class="wrap">
 <header>
-  <p class="eyebrow">ANÁLISE PREDITIVA · SEGMENTAÇÃO DE PERFIS DE SAÚDE</p>
-  <h1>O que existe na base e quais padrões cardiovasculares aparecem nela</h1>
-  <p class="lede">O painel documenta a base usada no projeto, explica o tratamento dos dados, mostra as distribuições categóricas e apresenta os perfis encontrados pelo K-Means. As relações com doença cardíaca são descritivas: o painel não estabelece causalidade.</p>
-  <div class="note"><strong>Fonte:</strong> {html.escape(fonte.get('dataset','Diabetes Health Indicators Dataset'))}, arquivo {html.escape(fonte.get('arquivo',''))}, disponibilizado via Kaggle a partir do BRFSS 2015. <a href="{html.escape(fonte.get('url','https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset'))}" target="_blank" rel="noopener">Abrir fonte</a>.</div>
+<p class="eyebrow">ANÁLISE EXPLORATÓRIA DE SAÚDE</p>
+<h1>Como gênero, prevenção e condição socioeconômica se relacionam aos indicadores de saúde</h1>
+<p class="lede">Esta página foi reduzida a três cruzamentos diretamente interpretáveis da base. Os percentuais mostram associações observadas na amostra; eles não permitem afirmar que um fator cause sozinho um desfecho.</p>
+<div class="kpi-grid">
+  <div class="kpi"><b>{fmt_inteiro(dados['total_registros'])}</b><span>registros analisados</span></div>
+  <div class="kpi"><b>3</b><span>análises principais</span></div>
+  <div class="kpi"><b>2015</b><span>BRFSS / dataset disponibilizado via Kaggle</span></div>
+</div>
 </header>
 
 <section>
-  <h2>1. Visão geral da base</h2>
-  <p class="section-intro">Esta versão do conjunto contém respostas de 253.680 participantes no arquivo utilizado pelo projeto. A base original do Kaggle possui 21 variáveis de entrada; todas elas são mantidas no pipeline, cobrindo os perfis clínico, demográfico, funcional, comportamental, socioeconômico e de acesso à saúde.</p>
-  <div class="kpi-grid">
-    {card_indicador('Registros analisados', fmt_inteiro(total), 'linhas após a seleção/tratamento')}
-    {card_indicador('Colunas no arquivo tratado', fmt_inteiro(total_cols), 'inclui a variável-alvo')}
-    {card_indicador('Features no clustering', fmt_inteiro(len(dados.get('features_usadas', []))), 'após One-Hot Encoding')}
-    {card_indicador('Prevalência observada', fmt(dados['prevalencia_geral_doenca_cardiaca_pct'])+'%', 'HeartDiseaseorAttack na base')}
-  </div>
-  <div class="info-grid" style="margin-top:18px">
-    <div class="box"><h3>O que o conjunto representa?</h3><p class="muted">É um conjunto derivado do BRFSS 2015, um inquérito de saúde. As variáveis representam respostas/indicadores de condições crônicas, comportamentos, saúde percebida, função e características demográficas.</p></div>
-    <div class="box"><h3>Por que esta base foi escolhida?</h3><p class="muted">Ela reúne indicadores que podem ser combinados para estudar perfis de saúde e verificar se grupos com características semelhantes exibem prevalências observadas distintas de doença cardíaca.</p></div>
-  </div>
+<h2>1. Gênero vs. fatores de risco e eventos cardíacos</h2>
+<p class="intro">Cada indicador é comparado separadamente entre mulheres e homens. “Sem atividade física” é calculado como o complemento de PhysActivity para tornar visualmente explícita a ideia de sedentarismo.</p>
+<div class="chart-wrap"><div class="svg-title">Percentual de cada grupo que apresenta o indicador</div>{svg1}<div class="legend">Doença cardíaca = desfecho observado · tabagismo/álcool = comportamentos de risco · sem atividade física = comportamento associado ao sedentarismo.</div></div>
+<div class="note"><strong>Leitura:</strong> {html.escape(narrativa_grafico1(g1['resumo']))}</div>
 </section>
 
 <section>
-  <h2>2. Dicionário das variáveis usadas</h2>
-  <p class="section-intro">Esta tabela deixa explícito o significado de cada variável e o motivo de sua presença no pipeline.</p>
-  <div style="overflow:auto"><table><thead><tr><th>Variável</th><th>Nome</th><th>Tipo</th><th>Papel</th><th>Descrição</th></tr></thead><tbody>{linhas_variaveis}</tbody></table></div>
+<h2>2. Comportamento preventivo e barreira financeira</h2>
+<p class="intro">Aqui a comparação muda de foco: a pergunta é quanto cada grupo relata acompanhamento preventivo, cobertura de saúde e dificuldade financeira para buscar atendimento.</p>
+<div class="chart-wrap"><div class="svg-title">Percentual de cada grupo que respondeu “sim” ao indicador</div>{svg2}</div>
+<div class="note"><strong>Leitura:</strong> {html.escape(narrativa_grafico2(g2['resumo']))}</div>
 </section>
 
 <section>
-  <h2>3. Limpeza e preparo: causas das decisões</h2>
-  <p class="section-intro">Cada tratamento existe por uma razão técnica. O objetivo não é apenas “limpar”, mas preparar as variáveis para os algoritmos sem descartar informação desnecessariamente.</p>
-  <div class="pipeline">
-    <div class="step"><b>01 · Seleção</b><span>Manter todas as variáveis da base original, validando sua presença e tipos antes de seguir para o Machine Learning.</span></div>
-    <div class="step"><b>02 · Validação</b><span>Checar valores ausentes e não numéricos antes de gerar as matrizes usadas pelo Machine Learning.</span></div>
-    <div class="step"><b>03 · BMI extremo</b><span>Aplicar winsorização em vez de apagar linhas, preservando a quantidade de respondentes.</span></div>
-    <div class="step"><b>04 · Pré-processamento</b><span>Fazer imputação, One-Hot Encoding e escalonamento para tornar as variáveis comparáveis no K-Means.</span></div>
-  </div>
-  <div class="note"><strong>Motivo principal:</strong> o K-Means trabalha com distância. Sem escalonamento/representação adequada, variáveis em escalas diferentes podem dominar o cálculo de similaridade. Já o One-Hot Encoding transforma a variável categórica de diabetes em colunas explícitas.</div>
-  <div class="two-grid" style="margin-top:18px">
-    <div class="box"><h3>BMI observado após tratamento</h3><p><strong>Média:</strong> {fmt_numero(bmi.get('media',0))} · <strong>Mediana:</strong> {fmt_numero(bmi.get('mediana',0))}</p><p class="muted">Faixa observada: {fmt_numero(bmi.get('min',0))} a {fmt_numero(bmi.get('max',0))}.</p></div>
-    <div class="box"><h3>Cuidados de interpretação</h3><p class="muted">“Fator associado” não significa “causa”. A base é observacional e o clustering não é um estudo causal.</p></div>
-  </div>
+<h2>3. Determinantes sociais da saúde</h2>
+<p class="intro">O heatmap cruza duas dimensões socioeconômicas: renda (colunas) e escolaridade (linhas). À esquerda vemos a média de saúde geral percebida (GenHlth); à direita, a prevalência observada de diabetes binário.</p>
+<div class="two">
+  <div class="box"><h3>Saúde geral percebida — média de GenHlth</h3><p class="muted">1 = excelente · 5 = ruim · valores maiores representam pior saúde percebida.</p>{heat1}</div>
+  <div class="box"><h3>Diabetes — prevalência observada</h3><p class="muted">Percentual de respondentes com Diabetes_binary = 1.</p>{heat2}</div>
+</div>
+<div class="note"><strong>Leitura:</strong> {html.escape(narrativa_grafico3(g3['resumo']))}</div>
 </section>
 
 <section>
-  <h2>4. Distribuições da base — categorias em barras horizontais</h2>
-  <p class="section-intro">As variáveis categóricas/ordinais são apresentadas em barras horizontais para facilitar comparação de proporções, especialmente quando existem muitas categorias.</p>
-  <div class="two-grid">
-    <div class="box"><h3>Classificação de diabetes</h3>{svg_diabetes}</div>
-    <div class="box"><h3>Saúde geral percebida</h3>{svg_saude}</div>
-  </div>
-  <div class="two-grid" style="margin-top:18px">
-    <div class="box"><h3>Faixa etária</h3>{svg_idade}</div>
-    <div class="box"><h3>Sexo</h3>{svg_sexo}</div>
-  </div>
-</section>
-
-<section>
-  <h2>5. Indicadores de saúde presentes na população</h2>
-  <p class="section-intro">Aqui vemos quanto da base apresenta cada indicador. Essa leitura ajuda a entender o contexto antes de interpretar os clusters.</p>
-  <div class="box">{svg_indicadores}</div>
-</section>
-
-<section>
-  <h2>6. Associação descritiva com doença cardíaca</h2>
-  <p class="section-intro">A tabela compara a prevalência observada de doença cardíaca entre pessoas com e sem cada indicador binário. A diferença está em pontos percentuais. Isso mostra associação na amostra, não prova causa.</p>
-  <div style="overflow:auto"><table><thead><tr><th>Indicador</th><th>Com indicador</th><th>Sem indicador</th><th>Diferença</th><th>N com</th><th>N sem</th></tr></thead><tbody>{linhas_assoc}</tbody></table></div>
-  <div class="note"><strong>Como usar:</strong> esses números ajudam a explicar por que certos fatores aparecem destacados na análise, mas não devem ser apresentados como “causas comprovadas” pela base.</div>
-</section>
-
-<section>
-  <h2>7. Formação dos clusters</h2>
-  <p class="section-intro">Foram testados diferentes valores de k. Para facilitar a leitura, cada valor de k aparece como uma barra horizontal. A inércia apoia o método do cotovelo; o silhouette mede a separação média dos grupos.</p>
-  <div class="chart-grid">
-    <div class="box"><h3>Inércia por k</h3><div class="muted">Método do cotovelo</div>{svg_cotovelo}</div>
-    <div class="box"><h3>Silhouette por k</h3><div class="muted">Separação média dos grupos</div>{svg_silhueta}</div>
-  </div>
-  <div class="note"><strong>k escolhido: {dados['k_escolhido']}</strong>. O código seleciona o melhor silhouette entre os valores testados, usando a inércia como apoio visual.</div>
-</section>
-
-<section>
-  <h2>8. Mapa dos perfis</h2>
-  <p class="section-intro">PCA reduz as dimensões usadas no clustering para duas componentes apenas para visualização. As duas primeiras componentes explicam aproximadamente {pca_pct}% da variância.</p>
-  <div class="box">{svg_dispersao}</div>
-</section>
-
-<section>
-  <h2>9. O que cada cluster representa</h2>
-  <p class="section-intro">Os cartões usam os valores originais da base para tornar os grupos interpretáveis. A prevalência de doença cardíaca é calculada depois da clusterização.</p>
-  <div class="profile-list">{cards}</div>
-</section>
-
-<section>
-  <h2>10. Prevalência observada por cluster</h2>
-  <p class="section-intro">A comparação mostra como o desfecho se distribui nos grupos encontrados. Como o alvo não participou do clustering, essa etapa funciona como uma leitura posterior dos perfis.</p>
-  <div class="box">{svg_prev}</div>
-</section>
-
-<section>
-  <h2>11. Por que cada etapa existe?</h2>
-  <div class="three-grid">
-    <div class="box"><h3>Segmentação</h3><p class="muted">{html.escape(interpretacao.get('objetivo',''))}</p></div>
-    <div class="box"><h3>K-Means</h3><p class="muted">{html.escape(interpretacao.get('motivo_kmeans',''))}</p></div>
-    <div class="box"><h3>PCA e validação</h3><p class="muted">{html.escape(interpretacao.get('motivo_pca',''))}<br><br>{html.escape(interpretacao.get('motivo_validacao',''))}</p></div>
-  </div>
+<h2>O que esses três gráficos permitem dizer?</h2>
+<div class="two">
+  <div class="box"><h3>O que a análise mede</h3><p class="muted">Diferenças de percentuais entre grupos definidos por sexo e padrões de saúde associados a renda e escolaridade. O foco é identificar onde as taxas observadas são diferentes e quais combinações merecem investigação.</p></div>
+  <div class="box"><h3>O que a análise não mede</h3><p class="muted">Ela não isola efeitos causais, não controla simultaneamente todas as variáveis e não permite concluir que gênero, renda, escolaridade ou um comportamento, isoladamente, causou o desfecho.</p></div>
+</div>
 </section>
 
 <footer>
-  <div><strong>Fonte:</strong> <a href="{html.escape(fonte.get('url','https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset'))}" target="_blank" rel="noopener">Diabetes Health Indicators Dataset — Kaggle</a>.</div>
-  <div>Pipeline: tratamento.py → pre_processamento.py → analise_clusters.py → gerar_painel.py</div>
-  <div>Gerado em {html.escape(str(dados.get('gerado_em','')))}</div>
+<div><strong>Fonte:</strong> <a href="{html.escape(dados['fonte']['url'])}" target="_blank" rel="noopener">Diabetes Health Indicators Dataset — Kaggle</a>.</div>
+<div>Pipeline: tratamento.py → analise_clusters.py → gerar_painel.py</div>
+<div>Gerado em {html.escape(str(dados.get('gerado_em','')))}</div>
 </footer>
 </div></body></html>'''
 
-    saida = PASTA_DADOS / "painel.html"
-    saida.parent.mkdir(parents=True, exist_ok=True)
-    saida.write_text(html_final, encoding="utf-8")
-    print(f"Painel gerado em {saida.resolve()}")
+    args.saida.parent.mkdir(parents=True, exist_ok=True)
+    args.saida.write_text(html_final, encoding="utf-8")
+    print(f"Painel gerado em {args.saida.resolve()}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
