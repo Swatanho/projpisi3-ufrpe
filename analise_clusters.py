@@ -1,287 +1,205 @@
-#!/usr/bin/env python3
 """
-Segmentação de Perfis de Saúde via K-Means.
+Gera as três análises exploratórias do painel.
 
-Usa a saída de pre_processamento.py (features escaladas) para agrupar os
-registros em perfis de saúde, escolhe o número de clusters por silhouette +
-inércia e cruza cada cluster com a ocorrência observada de
-HeartDiseaseorAttack para interpretação.
+1. Gênero vs. fatores de risco e evento cardíaco.
+2. Comportamento preventivo vs. barreira financeira.
+3. Determinantes sociais (renda e educação) vs. saúde percebida e diabetes.
 
-Também gera estatísticas globais da base e associações descritivas entre
-indicadores de saúde e o desfecho. Essas associações NÃO representam causas.
-
-Gera DB/dados_tratados/dados_clusters.json, consumido pelo painel HTML.
+A etapa é descritiva. Os cruzamentos não demonstram causalidade.
 
 Dependências:
-    pip install pandas scikit-learn
+    pip install pandas
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-from sklearn.cluster import KMeans, MiniBatchKMeans
-from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score
 
-SEMENTE = 42
-PASTA_DADOS = Path("DB/dados_tratados")
 ALVO = "HeartDiseaseorAttack"
+SEXOS = {0: "Mulher", 1: "Homem"}
+RENDA_LABELS = {i: f"Renda {i}" for i in range(1, 9)}
+EDUCACAO_LABELS = {i: f"Escolaridade {i}" for i in range(1, 7)}
 
-FEATURES_CLUSTERING = [
-    "HighBP", "HighChol", "CholCheck", "BMI", "Smoker", "HvyAlcoholConsump",
-    "PhysActivity", "Age", "Sex", "Stroke", "GenHlth", "DiffWalk",
-    "Fruits", "Veggies", "AnyHealthcare", "NoDocbcCost",
-    "MentHlth", "PhysHlth", "Education", "Income",
+REQUERIDAS = [
+    ALVO, "Sex", "Smoker", "HvyAlcoholConsump", "PhysActivity",
+    "CholCheck", "AnyHealthcare", "NoDocbcCost",
+    "Income", "Education", "GenHlth", "Diabetes_012",
 ]
 
-ROTULOS_AGE = {
-    1: "18–24", 2: "25–29", 3: "30–34", 4: "35–39", 5: "40–44", 6: "45–49",
-    7: "50–54", 8: "55–59", 9: "60–64", 10: "65–69", 11: "70–74", 12: "75–79", 13: "80+",
-}
-ROTULOS_GENHLTH = {1: "Excelente", 2: "Muito boa", 3: "Boa", 4: "Razoável", 5: "Ruim"}
-ROTULOS_DIABETES = {0: "Sem diabetes", 1: "Pré-diabetes", 2: "Diabetes"}
-ROTULOS_SEX = {0: "Feminino", 1: "Masculino"}
 
-DESCRICOES_FEATURES = {
-    "HighBP": "Pressão arterial alta",
-    "HighChol": "Colesterol alto",
-    "CholCheck": "Verificação de colesterol",
-    "BMI": "Índice de Massa Corporal (IMC)",
-    "Diabetes_012": "Classificação de diabetes",
-    "Smoker": "Tabagismo",
-    "HvyAlcoholConsump": "Consumo elevado de álcool",
-    "PhysActivity": "Atividade física",
-    "Age": "Faixa etária",
-    "Sex": "Sexo",
-    "Stroke": "Histórico de AVC",
-    "GenHlth": "Saúde geral percebida",
-    "DiffWalk": "Dificuldade para caminhar",
-    "Fruits": "Consumo de frutas",
-    "Veggies": "Consumo de vegetais",
-    "AnyHealthcare": "Cobertura de saúde",
-    "NoDocbcCost": "Não procurou médico por custo",
-    "MentHlth": "Dias de saúde mental ruim",
-    "PhysHlth": "Dias de saúde física ruim",
-    "Education": "Escolaridade",
-    "Income": "Faixa de renda",
-}
+def carregar(caminho: Path) -> pd.DataFrame:
+    if not caminho.is_file():
+        raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+    df = pd.read_csv(caminho, low_memory=False)
+    faltantes = [c for c in REQUERIDAS if c not in df.columns]
+    if faltantes:
+        raise ValueError("Colunas necessárias ausentes: " + ", ".join(faltantes))
+    for c in REQUERIDAS:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    if df[REQUERIDAS].isna().any().any():
+        falt = df[REQUERIDAS].isna().sum()
+        falt = falt[falt > 0]
+        raise ValueError("Há valores ausentes/não numéricos nas variáveis da análise: " + ", ".join(f"{c}={int(n)}" for c, n in falt.items()))
+    # Diabetes_binary: 1 = pré-diabetes ou diabetes; 0 = sem diabetes.
+    df["Diabetes_binary"] = (df["Diabetes_012"] > 0).astype(int)
+    df["Sedentario"] = (df["PhysActivity"] == 0).astype(int)
+    return df
 
 
-def escolher_k(X: np.ndarray, k_min: int = 2, k_max: int = 7) -> tuple[list[dict], int]:
-    resultados = []
-    amostra_idx = np.random.RandomState(SEMENTE).choice(
-        len(X), size=min(6000, len(X)), replace=False
-    )
-    for k in range(k_min, k_max + 1):
-        modelo = MiniBatchKMeans(
-            n_clusters=k, random_state=SEMENTE, n_init=10, batch_size=2048
-        )
-        labels = modelo.fit_predict(X)
-        silhueta = silhouette_score(X[amostra_idx], labels[amostra_idx])
-        resultados.append({"k": k, "inercia": float(modelo.inertia_), "silhueta": float(silhueta)})
-        print(f"k={k}: inércia={modelo.inertia_:,.0f}  silhueta={silhueta:.4f}")
-    melhor = max(resultados, key=lambda r: (round(r["silhueta"], 2), -r["k"]))
-    return resultados, melhor["k"]
+def percentual_por_sexo(df: pd.DataFrame, coluna: str) -> list[dict]:
+    out = []
+    for codigo, rotulo in SEXOS.items():
+        grupo = df[df["Sex"] == codigo]
+        out.append({"sex": codigo, "sexo": rotulo, "percentual": round(100 * float(grupo[coluna].mean()), 2), "n": int(len(grupo))})
+    return out
 
 
-def distribuicoes_base(base: pd.DataFrame) -> dict:
-    """Monta estatísticas globais para detalhar a base no painel."""
-    def dist_percentual(coluna: str, rotulos: dict | None = None) -> list[dict]:
-        serie = base[coluna].value_counts(normalize=True).sort_index()
-        resultado = []
-        for chave, valor in serie.items():
-            numero = int(chave) if pd.notna(chave) else chave
-            resultado.append({
-                "codigo": numero,
-                "categoria": (rotulos or {}).get(numero, str(numero)),
-                "percentual": round(float(valor * 100), 2),
-            })
-        return resultado
-
-    binarias = [
-        "HighBP", "HighChol", "CholCheck", "Smoker",
-        "HvyAlcoholConsump", "PhysActivity", "Stroke", "DiffWalk",
+def grafico1(df: pd.DataFrame) -> dict:
+    metricas = [
+        (ALVO, "Doença cardíaca / ataque cardíaco", "desfecho"),
+        ("Smoker", "Tabagismo", "risco comportamental"),
+        ("HvyAlcoholConsump", "Consumo elevado de álcool", "risco comportamental"),
+        ("Sedentario", "Sem atividade física", "comportamento associado"),
     ]
-    indicadores = []
-    for coluna in binarias:
-        percentual = 100 * float(base[coluna].mean())
-        indicadores.append({
-            "variavel": coluna,
-            "nome": DESCRICOES_FEATURES[coluna],
-            "percentual_1": round(percentual, 2),
-            "percentual_0": round(100 - percentual, 2),
-        })
-
+    dados = []
+    for coluna, nome, papel in metricas:
+        por_sexo = percentual_por_sexo(df, coluna)
+        dados.append({"variavel": coluna, "nome": nome, "papel": papel, "valores": por_sexo})
+    homem = {d["variavel"]: next(v["percentual"] for v in d["valores"] if v["sex"] == 1) for d in dados}
+    mulher = {d["variavel"]: next(v["percentual"] for v in d["valores"] if v["sex"] == 0) for d in dados}
     return {
-        "diabetes": dist_percentual("Diabetes_012", ROTULOS_DIABETES),
-        "saude_geral": dist_percentual("GenHlth", ROTULOS_GENHLTH),
-        "faixa_etaria": dist_percentual("Age", ROTULOS_AGE),
-        "sexo": dist_percentual("Sex", ROTULOS_SEX),
-        "indicadores_binarios": indicadores,
-        "bmi": {
-            "media": round(float(base["BMI"].mean()), 2),
-            "mediana": round(float(base["BMI"].median()), 2),
-            "min": round(float(base["BMI"].min()), 2),
-            "max": round(float(base["BMI"].max()), 2),
+        "titulo": "Gênero vs. fatores de risco e evento cardíaco",
+        "dados": dados,
+        "resumo": {
+            "taxa_cardiaca_mulher": mulher[ALVO],
+            "taxa_cardiaca_homem": homem[ALVO],
+            "diferenca_cardiaca_homem_menos_mulher_pp": round(homem[ALVO] - mulher[ALVO], 2),
+            "tabagismo_homem": homem["Smoker"],
+            "tabagismo_mulher": mulher["Smoker"],
+            "alcool_homem": homem["HvyAlcoholConsump"],
+            "alcool_mulher": mulher["HvyAlcoholConsump"],
+            "sedentarismo_homem": homem["Sedentario"],
+            "sedentarismo_mulher": mulher["Sedentario"],
         },
     }
 
 
-def associacoes_descritivas(base: pd.DataFrame) -> list[dict]:
-    """
-    Compara a prevalência observada do desfecho quando um indicador binário
-    está presente/ausente. É uma comparação descritiva, não causal.
-    """
-    colunas = [
-        "HighBP", "HighChol", "CholCheck", "Smoker",
-        "HvyAlcoholConsump", "PhysActivity", "Stroke", "DiffWalk",
+def grafico2(df: pd.DataFrame) -> dict:
+    metricas = [
+        ("CholCheck", "Fez check-up de colesterol", "prevenção"),
+        ("AnyHealthcare", "Tem cobertura de saúde", "acesso"),
+        ("NoDocbcCost", "Deixou de ir ao médico por custo", "barreira financeira"),
     ]
-    registros = []
-    for coluna in colunas:
-        com = base.loc[base[coluna] == 1, ALVO]
-        sem = base.loc[base[coluna] == 0, ALVO]
-        if len(com) == 0 or len(sem) == 0:
-            continue
-        taxa_com = 100 * float(com.mean())
-        taxa_sem = 100 * float(sem.mean())
-        registros.append({
-            "variavel": coluna,
-            "nome": DESCRICOES_FEATURES[coluna],
-            "prevalencia_com_indicador_pct": round(taxa_com, 2),
-            "prevalencia_sem_indicador_pct": round(taxa_sem, 2),
-            "diferenca_pontos_percentuais": round(taxa_com - taxa_sem, 2),
-            "n_com_indicador": int(len(com)),
-            "n_sem_indicador": int(len(sem)),
-        })
-    return sorted(
-        registros,
-        key=lambda x: abs(x["diferenca_pontos_percentuais"]),
-        reverse=True,
-    )
+    dados = []
+    for coluna, nome, papel in metricas:
+        dados.append({"variavel": coluna, "nome": nome, "papel": papel, "valores": percentual_por_sexo(df, coluna)})
+
+    def val(col, sex):
+        return round(100 * float(df.loc[df["Sex"] == sex, col].mean()), 2)
+
+    return {
+        "titulo": "Comportamento preventivo e barreira financeira",
+        "dados": dados,
+        "resumo": {
+            "cholcheck_mulher": val("CholCheck", 0),
+            "cholcheck_homem": val("CholCheck", 1),
+            "cobertura_mulher": val("AnyHealthcare", 0),
+            "cobertura_homem": val("AnyHealthcare", 1),
+            "barreira_custo_mulher": val("NoDocbcCost", 0),
+            "barreira_custo_homem": val("NoDocbcCost", 1),
+        },
+    }
 
 
-def perfil_interpretativo(base: pd.DataFrame) -> list[dict]:
-    perfis = []
-    total = len(base)
-    for c in sorted(base["cluster"].unique()):
-        grupo = base[base["cluster"] == c]
-        n = len(grupo)
-        diabetes_dist = grupo["Diabetes_012"].value_counts(normalize=True).sort_index()
-        genhlth_dist = grupo["GenHlth"].value_counts(normalize=True).sort_index()
-        age_dist = grupo["Age"].value_counts(normalize=True).sort_index()
+def matriz_heatmap(df: pd.DataFrame, valor_coluna: str, agregacao: str) -> dict:
+    if agregacao == "media":
+        tabela = df.pivot_table(index="Education", columns="Income", values=valor_coluna, aggfunc="mean")
+    elif agregacao == "taxa":
+        tabela = df.pivot_table(index="Education", columns="Income", values=valor_coluna, aggfunc="mean") * 100
+    else:
+        raise ValueError("Agregação inválida")
 
-        perfis.append({
-            "cluster": int(c),
-            "tamanho": int(n),
-            "percentual_do_total": round(100 * n / total, 2),
-            "prevalencia_doenca_cardiaca_pct": round(100 * grupo[ALVO].mean(), 2),
-            "bmi_medio": round(float(grupo["BMI"].mean()), 1),
-            "pct_pressao_alta": round(100 * grupo["HighBP"].mean(), 1),
-            "pct_colesterol_alto": round(100 * grupo["HighChol"].mean(), 1),
-            "pct_fumante": round(100 * grupo["Smoker"].mean(), 1),
-            "pct_dificuldade_caminhar": round(100 * grupo["DiffWalk"].mean(), 1),
-            "pct_atividade_fisica": round(100 * grupo["PhysActivity"].mean(), 1),
-            "pct_consumo_alcool_pesado": round(100 * grupo["HvyAlcoholConsump"].mean(), 1),
-            "pct_masculino": round(100 * grupo["Sex"].mean(), 1),
-            "faixa_etaria_predominante": ROTULOS_AGE.get(int(age_dist.idxmax()), "?"),
-            "saude_geral_predominante": ROTULOS_GENHLTH.get(int(genhlth_dist.idxmax()), "?"),
-            "diabetes_predominante": ROTULOS_DIABETES.get(int(diabetes_dist.idxmax()), "?"),
-            "distribuicao_diabetes": {
-                ROTULOS_DIABETES.get(int(k), str(k)): round(100 * v, 1)
-                for k, v in diabetes_dist.items()
-            },
-        })
-    return perfis
+    tabela = tabela.reindex(index=range(1, 7), columns=range(1, 9))
+    valores = []
+    for education in range(1, 7):
+        linha = []
+        for income in range(1, 9):
+            valor = tabela.loc[education, income]
+            linha.append(None if pd.isna(valor) else round(float(valor), 2))
+        valores.append(linha)
+    return {
+        "linhas": [{"codigo": i, "label": EDUCACAO_LABELS[i]} for i in range(1, 7)],
+        "colunas": [{"codigo": i, "label": RENDA_LABELS[i]} for i in range(1, 9)],
+        "valores": valores,
+    }
 
 
-def main() -> None:
-    pre_processado = pd.read_csv(PASTA_DADOS / "diabetes_cardiaco_pre_processado.csv")
-    tratado_original = pd.read_csv(PASTA_DADOS / "diabetes_cardiaco_tratado.csv")
-    assert len(pre_processado) == len(tratado_original), "Linhas desalinhadas entre os dois CSVs."
+def grafico3(df: pd.DataFrame) -> dict:
+    gen_hlth_income = df.groupby("Income")["GenHlth"].mean().reindex(range(1, 9))
+    diab_income = df.groupby("Income")["Diabetes_binary"].mean().reindex(range(1, 9)) * 100
+    gen_hlth_edu = df.groupby("Education")["GenHlth"].mean().reindex(range(1, 7))
+    diab_edu = df.groupby("Education")["Diabetes_binary"].mean().reindex(range(1, 7)) * 100
+    return {
+        "titulo": "Determinantes sociais da saúde",
+        "heatmap_genhlth": matriz_heatmap(df, "GenHlth", "media"),
+        "heatmap_diabetes": matriz_heatmap(df, "Diabetes_binary", "taxa"),
+        "resumo": {
+            "genhlth_renda_menor": round(float(gen_hlth_income.iloc[0]), 2),
+            "genhlth_renda_maior": round(float(gen_hlth_income.iloc[-1]), 2),
+            "diabetes_renda_menor_pct": round(float(diab_income.iloc[0]), 2),
+            "diabetes_renda_maior_pct": round(float(diab_income.iloc[-1]), 2),
+            "genhlth_educacao_menor": round(float(gen_hlth_edu.iloc[0]), 2),
+            "genhlth_educacao_maior": round(float(gen_hlth_edu.iloc[-1]), 2),
+            "diabetes_educacao_menor_pct": round(float(diab_edu.iloc[0]), 2),
+            "diabetes_educacao_maior_pct": round(float(diab_edu.iloc[-1]), 2),
+        },
+        "nota": "GenHlth é ordinal: valores menores representam melhor saúde percebida. Diabetes_binary é derivada de Diabetes_012.",
+    }
 
-    features_presentes = [f for f in FEATURES_CLUSTERING if f in pre_processado.columns]
-    # O OneHotEncoder pode produzir Diabetes_012_0, Diabetes_012_1, ...
-    # ou Diabetes_012_0.0, dependendo da versão/tipos do sklearn/pandas.
-    diabetes_ohe = sorted(c for c in pre_processado.columns if c.startswith("Diabetes_012_"))
-    if not diabetes_ohe:
-        print("Aviso: nenhuma coluna OHE de Diabetes_012 foi encontrada.")
-    features_presentes.extend(c for c in diabetes_ohe if c not in features_presentes)
-    ausentes = [f for f in FEATURES_CLUSTERING if f not in pre_processado.columns]
-    if ausentes:
-        print(f"Aviso: features não encontradas e ignoradas: {ausentes}")
-    X = pre_processado[features_presentes].to_numpy()
 
-    print("Buscando o número de clusters (k)...")
-    varredura_k, k_escolhido = escolher_k(X)
-    print(f"\nk escolhido: {k_escolhido}")
+def conclusoes(df: pd.DataFrame, g1: dict, g2: dict, g3: dict) -> dict:
+    r1, r2, r3 = g1["resumo"], g2["resumo"], g3["resumo"]
+    sexo_cardiaco = "homens" if r1["diferenca_cardiaca_homem_menos_mulher_pp"] > 0 else "mulheres" if r1["diferenca_cardiaca_homem_menos_mulher_pp"] < 0 else "homens e mulheres"
+    return {
+        "grafico1": f"Na amostra, {sexo_cardiaco} apresentam a maior taxa observada de doença cardíaca/ataque cardíaco. A comparação deve ser lida junto com tabagismo, álcool e ausência de atividade física; ela descreve associação e não permite atribuir o resultado a um único fator.",
+        "grafico2": f"O gráfico permite comparar diretamente o percentual de mulheres e homens que fizeram verificação de colesterol, possuem cobertura de saúde e relataram não ir ao médico por causa do custo. Esses números ajudam a separar comportamento preventivo de barreira financeira sem assumir que a diferença decorra exclusivamente de escolha individual.",
+        "grafico3": f"A combinação de renda e escolaridade mostra como o perfil socioeconômico se distribui junto com a saúde percebida e o diabetes. Como GenHlth vai de 1 (melhor) a 5 (pior), valores maiores significam pior saúde percebida. A comparação entre as faixas mais baixa e mais alta é descritiva e não prova que renda ou educação causem o desfecho.",
+    }
 
-    modelo_final = KMeans(n_clusters=k_escolhido, random_state=SEMENTE, n_init=20)
-    labels = modelo_final.fit_predict(X)
 
-    pca = PCA(n_components=2, random_state=SEMENTE)
-    coords = pca.fit_transform(X)
-    variancia_explicada = pca.explained_variance_ratio_.tolist()
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--entrada", type=Path, default=Path("DB/dados_tratados/diabetes_cardiaco_tratado.csv"))
+    parser.add_argument("--saida-dir", type=Path, default=Path("DB/dados_tratados"))
+    args = parser.parse_args()
 
-    base = tratado_original.copy()
-    base["cluster"] = labels
-    base["pca_x"] = coords[:, 0]
-    base["pca_y"] = coords[:, 1]
-
-    perfis = perfil_interpretativo(base)
-    prevalencia_geral = round(100 * base[ALVO].mean(), 2)
-
-    partes = []
-    for c in sorted(base["cluster"].unique()):
-        grupo = base[base["cluster"] == c]
-        partes.append(grupo.sample(n=min(600, len(grupo)), random_state=SEMENTE))
-    amostra_scatter = pd.concat(partes, ignore_index=True)
-
-    pontos = [
-        {"x": round(float(x), 3), "y": round(float(y), 3), "cluster": int(c), "doenca": int(d)}
-        for x, y, c, d in zip(
-            amostra_scatter["pca_x"], amostra_scatter["pca_y"],
-            amostra_scatter["cluster"], amostra_scatter[ALVO],
-        )
-    ]
-
+    df = carregar(args.entrada)
+    g1 = grafico1(df)
+    g2 = grafico2(df)
+    g3 = grafico3(df)
     saida = {
         "gerado_em": pd.Timestamp.now().isoformat(),
         "fonte": {
             "dataset": "Diabetes Health Indicators Dataset",
-            "arquivo": "diabetes_012_health_indicators_BRFSS2015.csv",
+            "arquivo": args.entrada.name,
             "origem": "Kaggle / BRFSS 2015",
             "url": "https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset",
-            "observacao": "Base observacional: relações encontradas são associações descritivas e não demonstram causalidade.",
         },
-        "total_registros": total if (total := len(base)) else 0,
-        "total_colunas_tratadas": int(tratado_original.shape[1]),
-        "features_usadas": features_presentes,
-        "prevalencia_geral_doenca_cardiaca_pct": prevalencia_geral,
-        "varredura_k": varredura_k,
-        "k_escolhido": k_escolhido,
-        "variancia_explicada_pca": [round(v, 4) for v in variancia_explicada],
-        "resumo_base": distribuicoes_base(tratado_original),
-        "associacoes_descritivas": associacoes_descritivas(tratado_original),
-        "perfis": sorted(perfis, key=lambda p: p["prevalencia_doenca_cardiaca_pct"]),
-        "pontos_dispersao": pontos,
-        "interpretacao": {
-            "objetivo": "Encontrar grupos de respondentes com combinações semelhantes de indicadores clínicos, demográficos, funcionais e comportamentais.",
-            "motivo_kmeans": "K-Means permite formar grupos por similaridade entre as características após o escalonamento.",
-            "motivo_pca": "PCA reduz as 15 dimensões usadas no clustering para duas componentes apenas para visualização.",
-            "motivo_validacao": "A variável-alvo HeartDiseaseorAttack não participa da formação dos clusters; ela é usada posteriormente para verificar se os perfis apresentam prevalências observadas distintas.",
-        },
+        "total_registros": int(len(df)),
+        "graficos": {"genero_riscos": g1, "prevencao_barreira": g2, "socioeconomico": g3},
+        "conclusoes": conclusoes(df, g1, g2, g3),
+        "observacao_metodologica": "As comparações são descritivas. Diferenças entre grupos não demonstram causalidade.",
     }
-
-    with (PASTA_DADOS / "dados_clusters.json").open("w", encoding="utf-8") as f:
-        json.dump(saida, f, ensure_ascii=False, indent=2)
-
-    print(f"\nOK: {len(pontos)} pontos de amostra, {len(perfis)} clusters.")
-    print(f"Salvo em {PASTA_DADOS / 'dados_clusters.json'}")
+    args.saida_dir.mkdir(parents=True, exist_ok=True)
+    caminho = args.saida_dir / "dados_graficos.json"
+    caminho.write_text(json.dumps(saida, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Análises geradas em {caminho.resolve()}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
