@@ -1,5 +1,13 @@
-#!/usr/bin/env python3
 """
+Limpeza e preparação inicial dos dados.
+
+Etapas:
+1. Seleção das variáveis relevantes ao problema.
+2. Verificação de valores ausentes/não numéricos.
+3. Remoção de atributos sem variância.
+4. Tratamento de valores extremos de BMI por winsorização.
+5. Geração de metadados para explicar a base e os motivos das escolhas.
+
 Dependências:
     pip install pandas scikit-learn
 """
@@ -22,14 +30,107 @@ ATRIBUTOS_RELEVANTES = [
     "GenHlth", "DiffWalk",
 ]
 
-# Carregar o Arquivo
+DICIONARIO_VARIAVEIS = {
+    "HeartDiseaseorAttack": {
+        "nome": "Doença cardíaca ou ataque cardíaco",
+        "tipo": "alvo binário",
+        "descricao": "Indica se o respondente relatou doença cardíaca coronariana ou infarto/ataque cardíaco.",
+        "papel": "variável-alvo; não é usada para formar os clusters",
+    },
+    "HighBP": {
+        "nome": "Pressão arterial alta",
+        "tipo": "binária",
+        "descricao": "Indicador de relato de pressão arterial alta.",
+        "papel": "fator clínico associado",
+    },
+    "HighChol": {
+        "nome": "Colesterol alto",
+        "tipo": "binária",
+        "descricao": "Indicador de relato de colesterol alto.",
+        "papel": "fator clínico associado",
+    },
+    "CholCheck": {
+        "nome": "Verificação de colesterol",
+        "tipo": "binária",
+        "descricao": "Indica realização de verificação de colesterol conforme a codificação da base.",
+        "papel": "indicador de acompanhamento preventivo",
+    },
+    "BMI": {
+        "nome": "Índice de Massa Corporal (IMC)",
+        "tipo": "contínua",
+        "descricao": "Medida numérica usada para representar o índice de massa corporal.",
+        "papel": "característica antropométrica",
+    },
+    "Diabetes_012": {
+        "nome": "Classificação de diabetes",
+        "tipo": "categórica ordinal",
+        "descricao": "0 = sem diabetes ou apenas durante a gravidez; 1 = pré-diabetes; 2 = diabetes.",
+        "papel": "condição clínica associada",
+    },
+    "Smoker": {
+        "nome": "Tabagismo",
+        "tipo": "binária",
+        "descricao": "Indicador relacionado ao histórico/condição de fumante conforme a codificação do conjunto.",
+        "papel": "fator comportamental associado",
+    },
+    "HvyAlcoholConsump": {
+        "nome": "Consumo elevado de álcool",
+        "tipo": "binária",
+        "descricao": "Indicador de consumo elevado de álcool segundo a definição da base.",
+        "papel": "fator comportamental associado",
+    },
+    "PhysActivity": {
+        "nome": "Atividade física",
+        "tipo": "binária",
+        "descricao": "Indicador de prática de atividade física conforme a codificação do conjunto.",
+        "papel": "fator comportamental associado",
+    },
+    "Age": {
+        "nome": "Faixa etária",
+        "tipo": "ordinal",
+        "descricao": "Faixas etárias codificadas em valores de 1 a 13, de 18–24 até 80+.",
+        "papel": "característica demográfica",
+    },
+    "Sex": {
+        "nome": "Sexo",
+        "tipo": "binária",
+        "descricao": "Categoria sexual codificada numericamente na base.",
+        "papel": "característica demográfica",
+    },
+    "Stroke": {
+        "nome": "Histórico de acidente vascular cerebral",
+        "tipo": "binária",
+        "descricao": "Indica histórico relatado de AVC.",
+        "papel": "condição clínica associada",
+    },
+    "GenHlth": {
+        "nome": "Saúde geral percebida",
+        "tipo": "ordinal",
+        "descricao": "Autoavaliação geral de saúde, de excelente a ruim.",
+        "papel": "indicador de estado de saúde",
+    },
+    "DiffWalk": {
+        "nome": "Dificuldade para caminhar",
+        "tipo": "binária",
+        "descricao": "Indicador de dificuldade para caminhar ou subir escadas.",
+        "papel": "indicador funcional associado",
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Carregamento
+
 
 def ler_dataset(caminho: Path) -> pd.DataFrame:
     if not caminho.is_file():
         raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
     return pd.read_csv(caminho, low_memory=False)
 
-# Escolhe os atributos necessários
+
+# ---------------------------------------------------------------------------
+# Seleção e validação
+
 
 def selecionar_atributos(df: pd.DataFrame) -> pd.DataFrame:
     colunas = [ALVO, *ATRIBUTOS_RELEVANTES]
@@ -58,7 +159,6 @@ def selecionar_atributos(df: pd.DataFrame) -> pd.DataFrame:
         )
     return selecionado
 
-# Remoção de redundância
 
 def remover_sem_variancia(
     df: pd.DataFrame, limite_variancia: float = 0.0
@@ -74,25 +174,15 @@ def remover_sem_variancia(
     return df.loc[:, [ALVO, *mantidas]].copy(), removidas
 
 
-# Tratamento de valores extremos do BMI (WINSORIZAÇÃO de valores extremos de BMI)
-#
-# O BMI é a única variável contínua do conjunto. As demais colunas são fatores
-# de risco binários/ordinais, cujas combinações raras representam justamente os
-# grupos de maior risco e não devem ser descartadas. Por isso, em vez de remover
-# linhas, aplicamos winsorização simétrica: valores acima do percentil superior
-# são limitados ao teto e valores abaixo do percentil inferior são limitados ao
-# piso, preservando todos os registros e a distribuição da classe alvo.
-#
-# Com o percentil padrão de 99.5, o teto é o P99,5 (= 55) e o piso é o P0,5
-# (= 17). O piso de 17 absorve BMIs de 12 a 16, que são fisiologicamente
-# implausíveis (provável erro de digitação ou desnutrição severa) sem removê-los.
+# ---------------------------------------------------------------------------
+# Tratamento de extremos
+
 
 def tratar_bmi_extremo(
     df: pd.DataFrame,
     coluna: str = "BMI",
     limite_percentil: float = 99.5,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-
     if coluna not in df.columns:
         raise ValueError(f"Coluna não encontrada: {coluna}")
     if not 50 < limite_percentil <= 100:
@@ -116,16 +206,17 @@ def tratar_bmi_extremo(
     registros_inferior["valor_limitado"] = piso
     registros_inferior["tipo_limite"] = "inferior"
 
-    registros = pd.concat(
-        [registros_superior, registros_inferior], ignore_index=True
-    )
+    registros = pd.concat([registros_superior, registros_inferior], ignore_index=True)
 
     tratado = df.copy()
     tratado.loc[mascara_superior, coluna] = teto
     tratado.loc[mascara_inferior, coluna] = piso
     return tratado.reset_index(drop=True), registros.reset_index(drop=True)
 
-# SEÇÃO DE COMPARAÇÃO DE DADOS
+
+# ---------------------------------------------------------------------------
+# Comparação e documentação da base
+
 
 def resumo_colunas(df: pd.DataFrame, etapa: str) -> pd.DataFrame:
     resumo = df.describe(include="all").T.reset_index(names="coluna")
@@ -165,7 +256,67 @@ def gerar_comparacao(
         ignore_index=True,
     ).to_csv(pasta_saida / "estatisticas_antes_depois.csv", index=False)
 
-#### EXECUÇÃO
+
+def gerar_metadados_base(
+    original: pd.DataFrame,
+    selecionado: pd.DataFrame,
+    tratado: pd.DataFrame,
+    removidas: list[str],
+    registros_bmi: pd.DataFrame,
+    entrada: Path,
+    limite_percentil_bmi: float,
+    pasta_saida: Path,
+) -> None:
+    metadata = {
+        "fonte": {
+            "dataset": "Diabetes Health Indicators Dataset",
+            "arquivo_utilizado": entrada.name,
+            "origem": "Kaggle / BRFSS 2015",
+            "url": "https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset",
+            "observacao": "A base é observacional e baseada em respostas de inquérito; associações encontradas no painel não devem ser interpretadas como causalidade.",
+        },
+        "dimensoes": {
+            "linhas_originais": int(len(original)),
+            "colunas_originais": int(original.shape[1]),
+            "linhas_selecionadas": int(len(selecionado)),
+            "colunas_selecionadas_com_alvo": int(selecionado.shape[1]),
+            "colunas_tratadas_com_alvo": int(tratado.shape[1]),
+            "atributos_removidos_por_variancia": removidas,
+        },
+        "variavel_alvo": ALVO,
+        "variaveis": {
+            c: DICIONARIO_VARIAVEIS.get(c, {"nome": c, "tipo": "não documentada"})
+            for c in tratado.columns
+        },
+        "motivos_do_tratamento": [
+            {
+                "etapa": "Seleção de atributos",
+                "motivo": "Concentrar a análise nas variáveis disponíveis que têm relação direta com o perfil clínico, demográfico, funcional e comportamental considerado no projeto.",
+            },
+            {
+                "etapa": "Remoção por variância",
+                "motivo": "Eliminar atributos sem informação discriminativa, evitando dimensões inúteis na análise de clusters.",
+            },
+            {
+                "etapa": "Winsorização do BMI",
+                "motivo": "Reduzir a influência de valores extremos sem descartar pessoas da base nem alterar a variável-alvo.",
+                "percentil": limite_percentil_bmi,
+                "registros_ajustados": int(len(registros_bmi)),
+            },
+            {
+                "etapa": "Imputação, encoding e escala",
+                "motivo": "Adequar tipos de dados, categorias e escalas para os algoritmos de Machine Learning, evitando que uma variável numérica domine a distância usada pelo K-Means.",
+            },
+        ],
+    }
+    (pasta_saida / "metadados_base.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Execução
+
 
 def executar_tratamento(
     entrada: Path,
@@ -188,6 +339,16 @@ def executar_tratamento(
     gerar_comparacao(
         selecionado, tratado, removidas, len(registros_bmi), pasta_saida
     )
+    gerar_metadados_base(
+        original,
+        selecionado,
+        tratado,
+        removidas,
+        registros_bmi,
+        entrada,
+        limite_percentil_bmi,
+        pasta_saida,
+    )
 
     print("Tratamento concluído.")
     print(f"Linhas antes: {len(selecionado):,}")
@@ -204,10 +365,8 @@ def executar_tratamento(
     print(f"Atributos removidos por variância: {removidas or 'nenhum'}")
     print(f"Resultados: {pasta_saida.resolve()}")
 
-#  Aceita um percentil entre 50 (exclusivo) e 100 para limitar o BMI.
 
 def interpretar_percentil(valor: str) -> float:
-   
     try:
         numero = float(valor)
     except ValueError as exc:
