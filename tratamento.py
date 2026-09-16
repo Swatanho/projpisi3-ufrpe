@@ -27,7 +27,8 @@ ALVO = "HeartDiseaseorAttack"
 ATRIBUTOS_RELEVANTES = [
     "HighBP", "HighChol", "CholCheck", "BMI", "Diabetes_012", "Smoker",
     "HvyAlcoholConsump", "PhysActivity", "Age", "Sex", "Stroke",
-    "GenHlth", "DiffWalk",
+    "GenHlth", "DiffWalk", "Fruits", "Veggies", "AnyHealthcare",
+    "NoDocbcCost", "MentHlth", "PhysHlth", "Education", "Income",
 ]
 
 DICIONARIO_VARIAVEIS = {
@@ -114,6 +115,54 @@ DICIONARIO_VARIAVEIS = {
         "tipo": "binária",
         "descricao": "Indicador de dificuldade para caminhar ou subir escadas.",
         "papel": "indicador funcional associado",
+    },
+    "Fruits": {
+        "nome": "Consumo de frutas",
+        "tipo": "binária",
+        "descricao": "Indicador de consumo regular de frutas conforme a codificação da base.",
+        "papel": "fator comportamental associado",
+    },
+    "Veggies": {
+        "nome": "Consumo de vegetais",
+        "tipo": "binária",
+        "descricao": "Indicador de consumo regular de vegetais conforme a codificação da base.",
+        "papel": "fator comportamental associado",
+    },
+    "AnyHealthcare": {
+        "nome": "Cobertura de saúde",
+        "tipo": "binária",
+        "descricao": "Indica se o respondente possui qualquer tipo de cobertura de saúde.",
+        "papel": "indicador de acesso a serviços de saúde",
+    },
+    "NoDocbcCost": {
+        "nome": "Não procurou médico por custo",
+        "tipo": "binária",
+        "descricao": "Indica se o respondente deixou de procurar médico por questões de custo nos últimos 12 meses.",
+        "papel": "indicador de barreira de acesso a saúde",
+    },
+    "MentHlth": {
+        "nome": "Dias de saúde mental ruim",
+        "tipo": "contínua (contagem)",
+        "descricao": "Número de dias, nos últimos 30 dias, em que a saúde mental não foi boa.",
+        "papel": "indicador de estado de saúde",
+    },
+    "PhysHlth": {
+        "nome": "Dias de saúde física ruim",
+        "tipo": "contínua (contagem)",
+        "descricao": "Número de dias, nos últimos 30 dias, em que a saúde física não foi boa.",
+        "papel": "indicador de estado de saúde",
+    },
+    "Education": {
+        "nome": "Escolaridade",
+        "tipo": "ordinal",
+        "descricao": "Nível de escolaridade codificado de 1 (nunca frequentou escola) a 6 (faculdade ou mais).",
+        "papel": "característica socioeconômica",
+    },
+    "Income": {
+        "nome": "Faixa de renda",
+        "tipo": "ordinal",
+        "descricao": "Faixa de renda anual familiar codificada de 1 (< 10 mil dólares) a 8 (75 mil dólares ou mais).",
+        "papel": "característica socioeconômica",
     },
 }
 
@@ -291,7 +340,7 @@ def gerar_metadados_base(
         "motivos_do_tratamento": [
             {
                 "etapa": "Seleção de atributos",
-                "motivo": "Concentrar a análise nas variáveis disponíveis que têm relação direta com o perfil clínico, demográfico, funcional e comportamental considerado no projeto.",
+                "motivo": "Todas as variáveis da base original são mantidas (clínicas, demográficas, funcionais, comportamentais, socioeconômicas e de acesso à saúde), preservando a informação disponível para a análise.",
             },
             {
                 "etapa": "Remoção por variância",

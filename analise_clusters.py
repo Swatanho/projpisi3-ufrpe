@@ -34,6 +34,8 @@ ALVO = "HeartDiseaseorAttack"
 FEATURES_CLUSTERING = [
     "HighBP", "HighChol", "CholCheck", "BMI", "Smoker", "HvyAlcoholConsump",
     "PhysActivity", "Age", "Sex", "Stroke", "GenHlth", "DiffWalk",
+    "Fruits", "Veggies", "AnyHealthcare", "NoDocbcCost",
+    "MentHlth", "PhysHlth", "Education", "Income",
 ]
 
 ROTULOS_AGE = {
@@ -58,6 +60,14 @@ DESCRICOES_FEATURES = {
     "Stroke": "Histórico de AVC",
     "GenHlth": "Saúde geral percebida",
     "DiffWalk": "Dificuldade para caminhar",
+    "Fruits": "Consumo de frutas",
+    "Veggies": "Consumo de vegetais",
+    "AnyHealthcare": "Cobertura de saúde",
+    "NoDocbcCost": "Não procurou médico por custo",
+    "MentHlth": "Dias de saúde mental ruim",
+    "PhysHlth": "Dias de saúde física ruim",
+    "Education": "Escolaridade",
+    "Income": "Faixa de renda",
 }
 
 

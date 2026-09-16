@@ -19,11 +19,13 @@ ALVO = "HeartDiseaseorAttack"
 
 # Separação das Features com base no comportamento
 # O script analise_clusters.py espera que o Diabetes seja convertido em 3 colunas via OHE
-VARIAVEIS_CONTINUAS = ["BMI"]
-VARIAVEIS_NOMINAIS = ["Diabetes_012"] 
+VARIAVEIS_CONTINUAS = ["BMI", "MentHlth", "PhysHlth"]
+VARIAVEIS_NOMINAIS = ["Diabetes_012"]
 VARIAVEIS_BINA_ORDINAIS = [
     "HighBP", "HighChol", "CholCheck", "Smoker", "HvyAlcoholConsump",
-    "PhysActivity", "Age", "Sex", "Stroke", "GenHlth", "DiffWalk"
+    "PhysActivity", "Age", "Sex", "Stroke", "GenHlth", "DiffWalk",
+    "Fruits", "Veggies", "AnyHealthcare", "NoDocbcCost",
+    "Education", "Income"
 ]
 
 def main() -> int:

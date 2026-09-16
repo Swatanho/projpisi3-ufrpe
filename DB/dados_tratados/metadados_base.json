@@ -1,0 +1,172 @@
+{
+  "fonte": {
+    "dataset": "Diabetes Health Indicators Dataset",
+    "arquivo_utilizado": "diabetes_012_health_indicators_BRFSS2015.csv",
+    "origem": "Kaggle / BRFSS 2015",
+    "url": "https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset",
+    "observacao": "A base é observacional e baseada em respostas de inquérito; associações encontradas no painel não devem ser interpretadas como causalidade."
+  },
+  "dimensoes": {
+    "linhas_originais": 253680,
+    "colunas_originais": 22,
+    "linhas_selecionadas": 253680,
+    "colunas_selecionadas_com_alvo": 22,
+    "colunas_tratadas_com_alvo": 22,
+    "atributos_removidos_por_variancia": []
+  },
+  "variavel_alvo": "HeartDiseaseorAttack",
+  "variaveis": {
+    "HeartDiseaseorAttack": {
+      "nome": "Doença cardíaca ou ataque cardíaco",
+      "tipo": "alvo binário",
+      "descricao": "Indica se o respondente relatou doença cardíaca coronariana ou infarto/ataque cardíaco.",
+      "papel": "variável-alvo; não é usada para formar os clusters"
+    },
+    "HighBP": {
+      "nome": "Pressão arterial alta",
+      "tipo": "binária",
+      "descricao": "Indicador de relato de pressão arterial alta.",
+      "papel": "fator clínico associado"
+    },
+    "HighChol": {
+      "nome": "Colesterol alto",
+      "tipo": "binária",
+      "descricao": "Indicador de relato de colesterol alto.",
+      "papel": "fator clínico associado"
+    },
+    "CholCheck": {
+      "nome": "Verificação de colesterol",
+      "tipo": "binária",
+      "descricao": "Indica realização de verificação de colesterol conforme a codificação da base.",
+      "papel": "indicador de acompanhamento preventivo"
+    },
+    "BMI": {
+      "nome": "Índice de Massa Corporal (IMC)",
+      "tipo": "contínua",
+      "descricao": "Medida numérica usada para representar o índice de massa corporal.",
+      "papel": "característica antropométrica"
+    },
+    "Diabetes_012": {
+      "nome": "Classificação de diabetes",
+      "tipo": "categórica ordinal",
+      "descricao": "0 = sem diabetes ou apenas durante a gravidez; 1 = pré-diabetes; 2 = diabetes.",
+      "papel": "condição clínica associada"
+    },
+    "Smoker": {
+      "nome": "Tabagismo",
+      "tipo": "binária",
+      "descricao": "Indicador relacionado ao histórico/condição de fumante conforme a codificação do conjunto.",
+      "papel": "fator comportamental associado"
+    },
+    "HvyAlcoholConsump": {
+      "nome": "Consumo elevado de álcool",
+      "tipo": "binária",
+      "descricao": "Indicador de consumo elevado de álcool segundo a definição da base.",
+      "papel": "fator comportamental associado"
+    },
+    "PhysActivity": {
+      "nome": "Atividade física",
+      "tipo": "binária",
+      "descricao": "Indicador de prática de atividade física conforme a codificação do conjunto.",
+      "papel": "fator comportamental associado"
+    },
+    "Age": {
+      "nome": "Faixa etária",
+      "tipo": "ordinal",
+      "descricao": "Faixas etárias codificadas em valores de 1 a 13, de 18–24 até 80+.",
+      "papel": "característica demográfica"
+    },
+    "Sex": {
+      "nome": "Sexo",
+      "tipo": "binária",
+      "descricao": "Categoria sexual codificada numericamente na base.",
+      "papel": "característica demográfica"
+    },
+    "Stroke": {
+      "nome": "Histórico de acidente vascular cerebral",
+      "tipo": "binária",
+      "descricao": "Indica histórico relatado de AVC.",
+      "papel": "condição clínica associada"
+    },
+    "GenHlth": {
+      "nome": "Saúde geral percebida",
+      "tipo": "ordinal",
+      "descricao": "Autoavaliação geral de saúde, de excelente a ruim.",
+      "papel": "indicador de estado de saúde"
+    },
+    "DiffWalk": {
+      "nome": "Dificuldade para caminhar",
+      "tipo": "binária",
+      "descricao": "Indicador de dificuldade para caminhar ou subir escadas.",
+      "papel": "indicador funcional associado"
+    },
+    "Fruits": {
+      "nome": "Consumo de frutas",
+      "tipo": "binária",
+      "descricao": "Indicador de consumo regular de frutas conforme a codificação da base.",
+      "papel": "fator comportamental associado"
+    },
+    "Veggies": {
+      "nome": "Consumo de vegetais",
+      "tipo": "binária",
+      "descricao": "Indicador de consumo regular de vegetais conforme a codificação da base.",
+      "papel": "fator comportamental associado"
+    },
+    "AnyHealthcare": {
+      "nome": "Cobertura de saúde",
+      "tipo": "binária",
+      "descricao": "Indica se o respondente possui qualquer tipo de cobertura de saúde.",
+      "papel": "indicador de acesso a serviços de saúde"
+    },
+    "NoDocbcCost": {
+      "nome": "Não procurou médico por custo",
+      "tipo": "binária",
+      "descricao": "Indica se o respondente deixou de procurar médico por questões de custo nos últimos 12 meses.",
+      "papel": "indicador de barreira de acesso a saúde"
+    },
+    "MentHlth": {
+      "nome": "Dias de saúde mental ruim",
+      "tipo": "contínua (contagem)",
+      "descricao": "Número de dias, nos últimos 30 dias, em que a saúde mental não foi boa.",
+      "papel": "indicador de estado de saúde"
+    },
+    "PhysHlth": {
+      "nome": "Dias de saúde física ruim",
+      "tipo": "contínua (contagem)",
+      "descricao": "Número de dias, nos últimos 30 dias, em que a saúde física não foi boa.",
+      "papel": "indicador de estado de saúde"
+    },
+    "Education": {
+      "nome": "Escolaridade",
+      "tipo": "ordinal",
+      "descricao": "Nível de escolaridade codificado de 1 (nunca frequentou escola) a 6 (faculdade ou mais).",
+      "papel": "característica socioeconômica"
+    },
+    "Income": {
+      "nome": "Faixa de renda",
+      "tipo": "ordinal",
+      "descricao": "Faixa de renda anual familiar codificada de 1 (< 10 mil dólares) a 8 (75 mil dólares ou mais).",
+      "papel": "característica socioeconômica"
+    }
+  },
+  "motivos_do_tratamento": [
+    {
+      "etapa": "Seleção de atributos",
+      "motivo": "Todas as variáveis da base original são mantidas (clínicas, demográficas, funcionais, comportamentais, socioeconômicas e de acesso à saúde), preservando a informação disponível para a análise."
+    },
+    {
+      "etapa": "Remoção por variância",
+      "motivo": "Eliminar atributos sem informação discriminativa, evitando dimensões inúteis na análise de clusters."
+    },
+    {
+      "etapa": "Winsorização do BMI",
+      "motivo": "Reduzir a influência de valores extremos sem descartar pessoas da base nem alterar a variável-alvo.",
+      "percentil": 99.5,
+      "registros_ajustados": 1736
+    },
+    {
+      "etapa": "Imputação, encoding e escala",
+      "motivo": "Adequar tipos de dados, categorias e escalas para os algoritmos de Machine Learning, evitando que uma variável numérica domine a distância usada pelo K-Means."
+    }
+  ]
+}

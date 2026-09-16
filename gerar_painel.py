@@ -352,7 +352,7 @@ section{{padding:44px 0;border-bottom:1px solid var(--line)}} .section-intro{{ma
 
 <section>
   <h2>1. Visão geral da base</h2>
-  <p class="section-intro">Esta versão do conjunto contém respostas de 253.680 participantes no arquivo utilizado pelo projeto. A base original do Kaggle possui 21 variáveis de entrada; aqui selecionamos um subconjunto focado no perfil clínico, demográfico, funcional e comportamental para a análise.</p>
+  <p class="section-intro">Esta versão do conjunto contém respostas de 253.680 participantes no arquivo utilizado pelo projeto. A base original do Kaggle possui 21 variáveis de entrada; todas elas são mantidas no pipeline, cobrindo os perfis clínico, demográfico, funcional, comportamental, socioeconômico e de acesso à saúde.</p>
   <div class="kpi-grid">
     {card_indicador('Registros analisados', fmt_inteiro(total), 'linhas após a seleção/tratamento')}
     {card_indicador('Colunas no arquivo tratado', fmt_inteiro(total_cols), 'inclui a variável-alvo')}
@@ -375,7 +375,7 @@ section{{padding:44px 0;border-bottom:1px solid var(--line)}} .section-intro{{ma
   <h2>3. Limpeza e preparo: causas das decisões</h2>
   <p class="section-intro">Cada tratamento existe por uma razão técnica. O objetivo não é apenas “limpar”, mas preparar as variáveis para os algoritmos sem descartar informação desnecessariamente.</p>
   <div class="pipeline">
-    <div class="step"><b>01 · Seleção</b><span>Reduzir a base às variáveis coerentes com o problema e evitar atributos que não participam da análise escolhida.</span></div>
+    <div class="step"><b>01 · Seleção</b><span>Manter todas as variáveis da base original, validando sua presença e tipos antes de seguir para o Machine Learning.</span></div>
     <div class="step"><b>02 · Validação</b><span>Checar valores ausentes e não numéricos antes de gerar as matrizes usadas pelo Machine Learning.</span></div>
     <div class="step"><b>03 · BMI extremo</b><span>Aplicar winsorização em vez de apagar linhas, preservando a quantidade de respondentes.</span></div>
     <div class="step"><b>04 · Pré-processamento</b><span>Fazer imputação, One-Hot Encoding e escalonamento para tornar as variáveis comparáveis no K-Means.</span></div>
