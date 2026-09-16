@@ -14,7 +14,7 @@ DB: Contém o dataset original
 
 dados_tratados: dataset pós tratamento, com alguns arquivos úteis de análise.
 
-####Pipeline para limpeza de dados e exibição da página de análises: 
+#### Pipeline para limpeza de dados e exibição da página de análises: 
 
 1. Abrir o repositório contendo os códigos em um terminal
 2. Executar python processamento.py
@@ -22,3 +22,8 @@ dados_tratados: dataset pós tratamento, com alguns arquivos úteis de análise.
 4. Executar python analise_clusters.py
 5. Executar python gerar_painel.py
 6. Abrir o arquivo painel.html gerado a partir das análises.
+
+#### Estrutura mínima para execução da limpeza e geração da página de análises
+pandas
+numpy
+scikit-learn
