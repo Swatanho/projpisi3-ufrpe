@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
-# Definir caminhos relativos com base na localização de src/
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAW_DATA_PATH = (
     BASE_DIR
@@ -15,7 +14,6 @@ RAW_DATA_PATH = (
 PROCESSED_DATA_PATH = (
     BASE_DIR / "data" / "tratados" / "diabetes_processed.parquet"
 )
-
 
 def basic_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     """Realiza a limpeza inicial com a remoção de duplicatas exatas."""
@@ -133,5 +131,4 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    # Execução direta do módulo
     run_pipeline()
