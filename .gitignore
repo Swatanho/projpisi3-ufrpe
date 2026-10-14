@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / editores
+.idea/
+.vscode/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs e arquivos temporarios
+*.log
+.DS_Store
+Thumbs.db
