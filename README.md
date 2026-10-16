@@ -1,29 +1,29 @@
 ## Tratamento de Dados de Problemas Cardíacos com ML
-Projeto de Machine Learning em python para tratamento de dataset e uso posterior no projeto [Heart Health](https://github.com/Swatanho/projdsi-ufrpe).
+Projeto de Machine Learning em Python para tratamento de dataset e uso posterior no projeto [Heart Health](https://github.com/Swatanho/projdsi-ufrpe).
 
 
 Dataset utilizado: https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset
 
 #### Dependências:
 ```
-    pip install pandas scikit-learn
+pip install -r requirements.txt
 ```
 
 #### Pastas:
-DB: Contém o dataset original
+- `data/raw/`: contém os datasets originais (CSVs BRFSS 2015).
+- `data/tratados/`: dataset pós-tratamento (`diabetes_processed.parquet`) e demais arquivos úteis de análise.
+- `src/`: código-fonte do tratamento de dados e do dashboard.
 
-dados_tratados: dataset pós tratamento, com alguns arquivos úteis de análise.
-
-#### Pipeline para limpeza de dados e exibição da página de análises: 
+#### Pipeline para limpeza de dados e exibição da página de análises:
 
 1. Abrir o repositório contendo os códigos em um terminal
-2. Executar python tratamento.py
-3. Executar python pre_processamento.py
-4. Executar python analise_clusters.py
-5. Executar python gerar_painel.py
-6. Abrir o arquivo painel.html gerado a partir das análises.
+2. Executar `py src/data_prep.py` (gera `data/tratados/diabetes_processed.parquet`)
+3. Executar `streamlit run app.py` (abre o painel de análises no navegador)
 
 #### Estrutura mínima para execução da limpeza e geração da página de análises
 pandas
 numpy
 scikit-learn
+pyarrow
+streamlit
+plotly
