@@ -122,7 +122,7 @@ def run_pipeline(
         f"• Outliers sinalizados (Flag)   : {outliers_detectados:,} ({pct_outliers:.2f}%)"
     )
     print(
-        f"• Atributos sintéticos criados  : Comorbidity_Index, Health_Burden_Index, Lifestyle_Risk_Score"
+        f"• Atributos sintéticos criados  : Comorbidity_Index, Health_Burden_Index"
     )
     print(f"• Arquivo final salvo em        : {output_path}")
     print("=" * 55)
