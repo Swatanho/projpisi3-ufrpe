@@ -11,6 +11,9 @@ import streamlit as st
 
 from src.dashboard_comps import (
     fig_box_bmi,
+    fig_cluster_boxplots,
+    fig_cluster_distribuicao,
+    fig_cluster_prevalencia,
     fig_dcv_por_idade,
     fig_distribuicao_dcv,
     fig_health_burden,
@@ -28,6 +31,7 @@ st.set_page_config(
 # Caminho da base tratada
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "tratados" / "diabetes_processed.parquet"
+RESULTADOS_CLUSTER_PATH = BASE_DIR / "data" / "resultados_cluster"
 
 
 @st.cache_data
@@ -40,6 +44,21 @@ def load_data():
     return pd.read_parquet(DATA_PATH)
 
 
+@st.cache_data
+def load_cluster_resultados():
+    """Carrega as saídas do clustering (src/clustering_teste.py); None se ausentes."""
+    parquet = RESULTADOS_CLUSTER_PATH / "dados_clusterizados.parquet"
+    resumo = RESULTADOS_CLUSTER_PATH / "resumo_clusters.csv"
+    metricas = RESULTADOS_CLUSTER_PATH / "metricas_k.csv"
+    if not (parquet.exists() and resumo.exists() and metricas.exists()):
+        return None
+    return {
+        "dados": pd.read_parquet(parquet),
+        "resumo": pd.read_csv(resumo),
+        "metricas": pd.read_csv(metricas),
+    }
+
+
 # Carregar dados
 df = load_data()
 
@@ -50,11 +69,12 @@ st.markdown(
 )
 
 # Abas do Dashboard
-tab1, tab2, tab3 = st.tabs(
+tab1, tab2, tab3, tab4 = st.tabs(
     [
         "📊 Visão Geral & Epidemiologia",
         "🔍 Outliers & Qualidade dos Dados",
         "🩺 Fatores Clínicos & Triagem",
+        "🧩 Segmentação por Clusters",
     ]
 )
 
@@ -124,3 +144,41 @@ with tab3:
     with c_col2:
         st.subheader("Carga de Saúde Comprometida")
         st.plotly_chart(fig_health_burden(df), use_container_width=True)
+
+# ==============================================================================
+# ABA 4: SEGMENTAÇÃO POR CLUSTERS
+# ==============================================================================
+with tab4:
+    st.header("Segmentação de Perfis (K-Prototypes)")
+
+    resultados = load_cluster_resultados()
+    if resultados is None:
+        st.info(
+            "Resultados do clustering não encontrados em `data/resultados_cluster/`. "
+            "Execute o script `src/clustering_teste.py` para gerar os dados desta aba."
+        )
+    else:
+        dfc = resultados["dados"]
+        resumo = resultados["resumo"]
+        metricas = resultados["metricas"]
+
+        # KPIs: k escolhido (maior silhueta), tamanho da base e silhueta
+        melhor_k = metricas.loc[metricas["silhueta"].idxmax()]
+        k_col1, k_col2, k_col3 = st.columns(3)
+        k_col1.metric("Clusters (k)", int(melhor_k["k"]))
+        k_col2.metric("Registros Segmentados", f"{len(dfc):,}")
+        k_col3.metric("Silhueta do k Escolhido", f"{melhor_k['silhueta']:.3f}")
+
+        st.markdown("---")
+
+        s_col1, s_col2 = st.columns(2)
+        with s_col1:
+            st.subheader("Tamanho dos Clusters")
+            st.plotly_chart(fig_cluster_distribuicao(dfc), use_container_width=True)
+
+        with s_col2:
+            st.subheader("Prevalência de DCV por Cluster")
+            st.plotly_chart(fig_cluster_prevalencia(dfc), use_container_width=True)
+
+        st.subheader("Contínuas por Cluster")
+        st.plotly_chart(fig_cluster_boxplots(dfc), use_container_width=True)

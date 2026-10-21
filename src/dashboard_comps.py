@@ -92,3 +92,63 @@ def fig_health_burden(df: pd.DataFrame):
         title="Distribuição do Comprometimento Físico + Mental (Dias no Mês)",
         color_discrete_map={0: COR_POSITIVA, 1: COR_NEGATIVA},
     )
+
+
+# ---------------------------------------------------------------------------
+# Segmentação por clusters (K-Prototypes) — saídas de src/clustering_teste.py
+# ---------------------------------------------------------------------------
+
+
+def fig_cluster_distribuicao(dfc: pd.DataFrame):
+    """Barras com o tamanho de cada cluster (registros e % da base)."""
+    contagens = dfc["Cluster"].value_counts().sort_index().reset_index()
+    contagens.columns = ["Cluster", "Registros"]
+    contagens["% da Base"] = contagens["Registros"] / len(dfc) * 100
+    contagens["Rotulo"] = contagens.apply(
+        lambda r: f"{r['Registros']:,} ({r['% da Base']:.1f}%)", axis=1
+    )
+    return px.bar(
+        contagens,
+        x="Cluster",
+        y="Registros",
+        text="Rotulo",
+        title="Tamanho dos Clusters (Registros e % da Base)",
+        labels={"Registros": "Nº de Registros"},
+        color_discrete_sequence=[COR_DESTAQUE],
+    )
+
+
+def fig_cluster_prevalencia(dfc: pd.DataFrame):
+    """Barras com a prevalência de DCV (%) por cluster."""
+    prev = (
+        dfc.groupby("Cluster")["HeartDiseaseorAttack"]
+        .mean()
+        .mul(100)
+        .reset_index(name="Prevalência (%)")
+    )
+    return px.bar(
+        prev,
+        x="Cluster",
+        y="Prevalência (%)",
+        text_auto=".1f",
+        title="Prevalência de DCV por Cluster (%)",
+        color_discrete_sequence=[COR_NEGATIVA],
+    )
+
+
+def fig_cluster_boxplots(dfc: pd.DataFrame):
+    """Boxplots das contínuas (IMC e dias de saúde física/mental) por cluster."""
+    df_melt = dfc.melt(
+        id_vars="Cluster",
+        value_vars=["BMI", "MentHlth", "PhysHlth"],
+        var_name="Variável",
+        value_name="Valor",
+    )
+    return px.box(
+        df_melt,
+        x="Cluster",
+        y="Valor",
+        facet_col="Variável",
+        points=False,
+        title="Contínuas por Cluster (IMC e Dias de Saúde Comprometida)",
+    )
