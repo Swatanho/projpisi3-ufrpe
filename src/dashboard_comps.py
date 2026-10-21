@@ -6,6 +6,8 @@ mantendo este módulo separado do layout definido em `app.py`.
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Paleta padrão do projeto
 COR_POSITIVA = "#2ec4b6"  # sem DCV / registro normal
@@ -119,21 +121,30 @@ def fig_cluster_distribuicao(dfc: pd.DataFrame):
 
 
 def fig_cluster_prevalencia(dfc: pd.DataFrame):
-    """Barras com a prevalência de DCV (%) por cluster."""
-    prev = (
-        dfc.groupby("Cluster")["HeartDiseaseorAttack"]
-        .mean()
-        .mul(100)
-        .reset_index(name="Prevalência (%)")
+    """Prevalência de DCV por cluster, com linha da base e lift anotado."""
+    prev_base = dfc["HeartDiseaseorAttack"].mean() * 100
+    prev = dfc.groupby("Cluster")["HeartDiseaseorAttack"].mean().reset_index(name="taxa")
+    prev["Prevalência (%)"] = prev["taxa"] * 100
+    prev["Lift"] = prev["Prevalência (%)"] / prev_base
+    prev["Rotulo"] = prev.apply(
+        lambda r: f"{r['Prevalência (%)']:.1f}% ({r['Lift']:.2f}x)", axis=1
     )
-    return px.bar(
+    fig = px.bar(
         prev,
         x="Cluster",
         y="Prevalência (%)",
-        text_auto=".1f",
-        title="Prevalência de DCV por Cluster (%)",
+        text="Rotulo",
+        title="Prevalência de DCV por Cluster (% e lift vs. base)",
         color_discrete_sequence=[COR_NEGATIVA],
     )
+    fig.add_hline(
+        y=prev_base,
+        line_dash="dash",
+        line_color="#333333",
+        annotation_text=f"Base: {prev_base:.1f}%",
+        annotation_position="top left",
+    )
+    return fig
 
 
 def fig_cluster_boxplots(dfc: pd.DataFrame):
@@ -152,3 +163,101 @@ def fig_cluster_boxplots(dfc: pd.DataFrame):
         points=False,
         title="Contínuas por Cluster (IMC e Dias de Saúde Comprometida)",
     )
+
+
+def fig_cluster_composicao_clinica(dfc: pd.DataFrame):
+    """% de fatores clínicos de risco por cluster (barras agrupadas)."""
+    fatores = ["HighBP", "HighChol", "Smoker", "Stroke", "DiffWalk"]
+    comp = dfc.groupby("Cluster")[fatores].mean().mul(100).reset_index()
+    df_melt = comp.melt(id_vars="Cluster", var_name="Fator", value_name="%")
+    rotulos = {
+        "HighBP": "Hipertensão",
+        "HighChol": "Colesterol Alto",
+        "Smoker": "Fumante",
+        "Stroke": "AVC",
+        "DiffWalk": "Dificuldade p/ Andar",
+    }
+    df_melt["Fator"] = df_melt["Fator"].map(rotulos)
+    return px.bar(
+        df_melt,
+        x="Fator",
+        y="%",
+        color="Cluster",
+        barmode="group",
+        title="Composição Clínica por Cluster (% com o fator)",
+    )
+
+
+def fig_cluster_radar(resumo: pd.DataFrame):
+    """Radar com o perfil dos clusters (eixos escalados 0-1 entre clusters).
+
+    Idade média e GenHlth entram de propósito: permitem checar se o
+    gradiente de risco não é artefato de confundidores (ex.: clusters
+    apenas mais velhos).
+    """
+    eixos = {
+        "IMC": "bmi_medio",
+        "GenHlth": "genhlth_medio",
+        "Dias Saúde Física": "physhlth_medio",
+        "Dias Saúde Mental": "menthlth_medio",
+        "Idade Média": "idade_media",
+        "% Hipertensos": "pct_highbp",
+        "% Fumantes": "pct_smoker",
+    }
+    labels = list(eixos)
+    perfis = resumo[list(eixos.values())].copy()
+    perfis.columns = labels
+    amplitude = (perfis.max() - perfis.min()).replace(0, 1)
+    norm = (perfis - perfis.min()) / amplitude
+
+    fig = go.Figure()
+    for i, (_, linha) in enumerate(norm.iterrows()):
+        fig.add_trace(
+            go.Scatterpolar(
+                r=list(linha) + [linha[labels[0]]],  # fecha o polígono
+                theta=labels + [labels[0]],
+                fill="toself",
+                name=f"Cluster {int(resumo['Cluster'].iloc[i])}",
+            )
+        )
+    fig.update_layout(
+        title="Perfil dos Clusters (escalado 0-1 por eixo)",
+        polar={"radialaxis": {"range": [0, 1]}},
+    )
+    return fig
+
+
+def fig_cluster_cotovelo(metricas: pd.DataFrame):
+    """Custo (cotovelo) e silhueta por k, destacando o k escolhido."""
+    k_escolhido = int(metricas.loc[metricas["silhueta"].idxmax(), "k"])
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(
+        go.Scatter(
+            x=metricas["k"],
+            y=metricas["custo"],
+            name="Custo (cotovelo)",
+            mode="lines+markers",
+            line={"color": COR_DESTAQUE},
+        ),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=metricas["k"],
+            y=metricas["silhueta"],
+            name="Silhueta",
+            mode="lines+markers",
+            line={"color": COR_POSITIVA},
+        ),
+        secondary_y=True,
+    )
+    fig.add_vline(
+        x=k_escolhido,
+        line_dash="dash",
+        annotation_text=f"k escolhido = {k_escolhido}",
+    )
+    fig.update_xaxes(title_text="k", dtick=1)
+    fig.update_yaxes(title_text="Custo (K-Prototypes)", secondary_y=False)
+    fig.update_yaxes(title_text="Silhueta", secondary_y=True)
+    fig.update_layout(title="Escolha do k: Cotovelo (custo) e Silhueta")
+    return fig

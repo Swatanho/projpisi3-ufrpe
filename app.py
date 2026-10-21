@@ -12,8 +12,11 @@ import streamlit as st
 from src.dashboard_comps import (
     fig_box_bmi,
     fig_cluster_boxplots,
+    fig_cluster_composicao_clinica,
+    fig_cluster_cotovelo,
     fig_cluster_distribuicao,
     fig_cluster_prevalencia,
+    fig_cluster_radar,
     fig_dcv_por_idade,
     fig_distribuicao_dcv,
     fig_health_burden,
@@ -162,12 +165,15 @@ with tab4:
         resumo = resultados["resumo"]
         metricas = resultados["metricas"]
 
-        # KPIs: k escolhido (maior silhueta), tamanho da base e silhueta
+        # KPIs: k escolhido (maior silhueta), tamanho da base, silhueta e lift
         melhor_k = metricas.loc[metricas["silhueta"].idxmax()]
-        k_col1, k_col2, k_col3 = st.columns(3)
+        k_col1, k_col2, k_col3, k_col4 = st.columns(4)
         k_col1.metric("Clusters (k)", int(melhor_k["k"]))
         k_col2.metric("Registros Segmentados", f"{len(dfc):,}")
         k_col3.metric("Silhueta do k Escolhido", f"{melhor_k['silhueta']:.3f}")
+        k_col4.metric(
+            "Lift do Cluster de Maior Risco", f"{resumo['lift_dcv'].max():.2f}x"
+        )
 
         st.markdown("---")
 
@@ -182,3 +188,26 @@ with tab4:
 
         st.subheader("Contínuas por Cluster")
         st.plotly_chart(fig_cluster_boxplots(dfc), use_container_width=True)
+
+        cl_col1, cl_col2 = st.columns(2)
+        with cl_col1:
+            st.subheader("Composição Clínica por Cluster")
+            st.plotly_chart(
+                fig_cluster_composicao_clinica(dfc), use_container_width=True
+            )
+
+        with cl_col2:
+            st.subheader("Perfil dos Clusters (Radar)")
+            st.plotly_chart(fig_cluster_radar(resumo), use_container_width=True)
+            st.caption(
+                "Idade média e GenHlth no radar permitem checar se o gradiente "
+                "de risco é real ou artefato de idade/percepção de saúde."
+            )
+
+        with st.expander("Método: escolha do k (cotovelo + silhueta)"):
+            st.plotly_chart(fig_cluster_cotovelo(metricas), use_container_width=True)
+            st.caption(
+                "O k final é o de maior silhueta (calculada sobre contínuas "
+                "padronizadas + one-hot das categóricas); a curva de custo "
+                "(cotovelo) é exibida como apoio à decisão."
+            )
