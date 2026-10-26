@@ -4,4 +4,6 @@ scikit-learn
 pyarrow
 streamlit
 plotly
+kmodes
+matplotlib
 

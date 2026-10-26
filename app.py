@@ -1,8 +1,28 @@
+"""Dashboard HeartHealth — layout e orquestração das abas.
+
+As figuras Plotly ficam em `src/dashboard_comps.py`; este arquivo é
+responsável apenas pelo carregamento dos dados, KPIs e layout geral.
+"""
+
 from pathlib import Path
+
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
+
+from src.dashboard_comps import (
+    fig_box_bmi,
+    fig_cluster_boxplots,
+    fig_cluster_composicao_clinica,
+    fig_cluster_cotovelo,
+    fig_cluster_distribuicao,
+    fig_cluster_prevalencia,
+    fig_cluster_radar,
+    fig_dcv_por_idade,
+    fig_distribuicao_dcv,
+    fig_health_burden,
+    fig_outliers_iforest,
+    fig_prevalencia_comorbidade,
+)
 
 # Configuração da página
 st.set_page_config(
@@ -14,6 +34,7 @@ st.set_page_config(
 # Caminho da base tratada
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "tratados" / "diabetes_processed.parquet"
+RESULTADOS_CLUSTER_PATH = BASE_DIR / "data" / "resultados_cluster"
 
 
 @st.cache_data
@@ -26,6 +47,21 @@ def load_data():
     return pd.read_parquet(DATA_PATH)
 
 
+@st.cache_data
+def load_cluster_resultados():
+    """Carrega as saídas do clustering (src/clustering_teste.py); None se ausentes."""
+    parquet = RESULTADOS_CLUSTER_PATH / "dados_clusterizados.parquet"
+    resumo = RESULTADOS_CLUSTER_PATH / "resumo_clusters.csv"
+    metricas = RESULTADOS_CLUSTER_PATH / "metricas_k.csv"
+    if not (parquet.exists() and resumo.exists() and metricas.exists()):
+        return None
+    return {
+        "dados": pd.read_parquet(parquet),
+        "resumo": pd.read_csv(resumo),
+        "metricas": pd.read_csv(metricas),
+    }
+
+
 # Carregar dados
 df = load_data()
 
@@ -36,11 +72,12 @@ st.markdown(
 )
 
 # Abas do Dashboard
-tab1, tab2, tab3 = st.tabs(
+tab1, tab2, tab3, tab4 = st.tabs(
     [
         "📊 Visão Geral & Epidemiologia",
         "🔍 Outliers & Qualidade dos Dados",
         "🩺 Fatores Clínicos & Triagem",
+        "🧩 Segmentação por Clusters",
     ]
 )
 
@@ -69,32 +106,11 @@ with tab1:
 
     with g_col1:
         st.subheader("Distribuição do Desfecho (DCV)")
-        fig_dcv = px.pie(
-            df,
-            names="HeartDiseaseorAttack",
-            title="Proporção de Casos (0 = Sem DCV, 1 = Com DCV)",
-            color_discrete_sequence=["#2ec4b6", "#e71d36"],
-            hole=0.4,
-        )
-        st.plotly_chart(fig_dcv, use_container_width=True)
+        st.plotly_chart(fig_distribuicao_dcv(df), use_container_width=True)
 
     with g_col2:
         st.subheader("DCV por Faixa Etária")
-        df_age = (
-            df.groupby(["Age", "HeartDiseaseorAttack"])
-            .size()
-            .reset_transform if False else df.groupby(["Age", "HeartDiseaseorAttack"]).size().reset_index(name="Contagem")
-        )
-        fig_age = px.bar(
-            df_age,
-            x="Age",
-            y="Contagem",
-            color="HeartDiseaseorAttack",
-            barmode="group",
-            labels={"Age": "Faixa Etária (1 a 13)", "Contagem": "Nº de Pacientes"},
-            color_discrete_map={0: "#2ec4b6", 1: "#e71d36"},
-        )
-        st.plotly_chart(fig_age, use_container_width=True)
+        st.plotly_chart(fig_dcv_por_idade(df), use_container_width=True)
 
 # ==============================================================================
 # ABA 2: OUTLIERS & QUALIDADE DOS DADOS
@@ -106,14 +122,7 @@ with tab2:
 
     with o_col1:
         st.subheader("Distribuição do IMC (BMI) Pós-Winsorização")
-        fig_box = px.box(
-            df,
-            y="BMI",
-            points=False,
-            title="Boxplot do IMC (Limites Percentis Aplicados)",
-            color_discrete_sequence=["#ff9f1c"],
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.plotly_chart(fig_box_bmi(df), use_container_width=True)
 
     with o_col2:
         st.subheader("Outliers Multivariados (Isolation Forest)")
@@ -121,17 +130,7 @@ with tab2:
         st.write(
             f"**Total de registros sinalizados como anomalia:** {outliers_count:,} ({outliers_count/len(df)*100:.2f}%)"
         )
-
-        fig_out = px.scatter(
-            df.sample(5000, random_state=42),  # Amostragem para performance
-            x="BMI",
-            y="PhysHlth",
-            color="is_outlier",
-            title="Amostra de Detecção (IMC vs. Dias de Saúde Física Comprometida)",
-            color_discrete_map={False: "#2ec4b6", True: "#e71d36"},
-            labels={"is_outlier": "É Outlier?"},
-        )
-        st.plotly_chart(fig_out, use_container_width=True)
+        st.plotly_chart(fig_outliers_iforest(df), use_container_width=True)
 
 # ==============================================================================
 # ABA 3: FATORES CLÍNICOS & TRIAGEM
@@ -143,32 +142,72 @@ with tab3:
 
     with c_col1:
         st.subheader("Prevalência de DCV por Índice de Comorbidades")
-        df_com = (
-            df.groupby("Comorbidity_Index")["HeartDiseaseorAttack"]
-            .mean()
-            .reset_index()
-        )
-        df_com["Taxa_DCV_%"] = df_com["HeartDiseaseorAttack"] * 100
-
-        fig_com = px.bar(
-            df_com,
-            x="Comorbidity_Index",
-            y="Taxa_DCV_%",
-            text_auto=".1f",
-            title="Taxa de DCV (%) vs. Nº de Comorbidades Acumuladas",
-            labels={"Comorbidity_Index": "Índice de Comorbidades (0 a 4)"},
-            color_discrete_sequence=["#e71d36"],
-        )
-        st.plotly_chart(fig_com, use_container_width=True)
+        st.plotly_chart(fig_prevalencia_comorbidade(df), use_container_width=True)
 
     with c_col2:
         st.subheader("Carga de Saúde Comprometida")
-        fig_burden = px.histogram(
-            df,
-            x="Health_Burden_Index",
-            color="HeartDiseaseorAttack",
-            barmode="overlay",
-            title="Distribuição do Comprometimento Físico + Mental (Dias no Mês)",
-            color_discrete_map={0: "#2ec4b6", 1: "#e71d36"},
+        st.plotly_chart(fig_health_burden(df), use_container_width=True)
+
+# ==============================================================================
+# ABA 4: SEGMENTAÇÃO POR CLUSTERS
+# ==============================================================================
+with tab4:
+    st.header("Segmentação de Perfis (K-Prototypes)")
+
+    resultados = load_cluster_resultados()
+    if resultados is None:
+        st.info(
+            "Resultados do clustering não encontrados em `data/resultados_cluster/`. "
+            "Execute o script `src/clustering_teste.py` para gerar os dados desta aba."
         )
-        st.plotly_chart(fig_burden, use_container_width=True)
+    else:
+        dfc = resultados["dados"]
+        resumo = resultados["resumo"]
+        metricas = resultados["metricas"]
+
+        # KPIs: k escolhido (maior silhueta), tamanho da base, silhueta e lift
+        melhor_k = metricas.loc[metricas["silhueta"].idxmax()]
+        k_col1, k_col2, k_col3, k_col4 = st.columns(4)
+        k_col1.metric("Clusters (k)", int(melhor_k["k"]))
+        k_col2.metric("Registros Segmentados", f"{len(dfc):,}")
+        k_col3.metric("Silhueta do k Escolhido", f"{melhor_k['silhueta']:.3f}")
+        k_col4.metric(
+            "Lift do Cluster de Maior Risco", f"{resumo['lift_dcv'].max():.2f}x"
+        )
+
+        st.markdown("---")
+
+        s_col1, s_col2 = st.columns(2)
+        with s_col1:
+            st.subheader("Tamanho dos Clusters")
+            st.plotly_chart(fig_cluster_distribuicao(dfc), use_container_width=True)
+
+        with s_col2:
+            st.subheader("Prevalência de DCV por Cluster")
+            st.plotly_chart(fig_cluster_prevalencia(dfc), use_container_width=True)
+
+        st.subheader("Contínuas por Cluster")
+        st.plotly_chart(fig_cluster_boxplots(dfc), use_container_width=True)
+
+        cl_col1, cl_col2 = st.columns(2)
+        with cl_col1:
+            st.subheader("Composição Clínica por Cluster")
+            st.plotly_chart(
+                fig_cluster_composicao_clinica(dfc), use_container_width=True
+            )
+
+        with cl_col2:
+            st.subheader("Perfil dos Clusters (Radar)")
+            st.plotly_chart(fig_cluster_radar(resumo), use_container_width=True)
+            st.caption(
+                "Idade média e GenHlth no radar permitem checar se o gradiente "
+                "de risco é real ou artefato de idade/percepção de saúde."
+            )
+
+        with st.expander("Método: escolha do k (cotovelo + silhueta)"):
+            st.plotly_chart(fig_cluster_cotovelo(metricas), use_container_width=True)
+            st.caption(
+                "O k final é o de maior silhueta (calculada sobre contínuas "
+                "padronizadas + one-hot das categóricas); a curva de custo "
+                "(cotovelo) é exibida como apoio à decisão."
+            )
