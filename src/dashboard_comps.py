@@ -261,3 +261,35 @@ def fig_cluster_cotovelo(metricas: pd.DataFrame):
     fig.update_yaxes(title_text="Silhueta", secondary_y=True)
     fig.update_layout(title="Escolha do k: Cotovelo (custo) e Silhueta")
     return fig
+
+
+def fig_fatores_risco(fatores: list):
+    """Barras horizontais com as principais contribuições SHAP de um paciente.
+
+    `fatores` é a lista retornada por `PredictorDCV.prever()['fatores_principais']`
+    (contribuições SHAP em escala de logito; vermelho aumenta o risco,
+    verde-água reduz).
+    """
+    dados = [
+        {"rotulo": f"{f['feature']} = {f['valor']:g}", "contribuicao": f["contribuicao"]}
+        for f in fatores
+    ][::-1]  # maior |contribuição| no topo do gráfico
+    fig = go.Figure(
+        go.Bar(
+            x=[d["contribuicao"] for d in dados],
+            y=[d["rotulo"] for d in dados],
+            orientation="h",
+            marker_color=[
+                COR_NEGATIVA if d["contribuicao"] > 0 else COR_POSITIVA for d in dados
+            ],
+            text=[f"{d['contribuicao']:+.2f}" for d in dados],
+            textposition="outside",
+        )
+    )
+    fig.add_vline(x=0, line_width=1, line_color="#999999")
+    fig.update_layout(
+        title="Fatores que mais influenciaram esta predição (SHAP, escala de logito)",
+        xaxis_title="Contribuição para o risco (positivo = aumenta)",
+        margin=dict(l=10, r=40, t=50, b=10),
+    )
+    return fig

@@ -27,3 +27,15 @@ scikit-learn
 pyarrow
 streamlit
 plotly
+ 
+#### Modelo de predicao de DCV (reuso no app HeartHealth):  
+1. Executar `py src/train_model.py` (treina o XGBoost e gera `data/modelo/dcv_modelo.pkl` e `data/modelo/metricas_modelo.json`)  
+2. Para usar no app HeartHealth, copiar `src/predictor.py` e `data/modelo/dcv_modelo.pkl`:  
+ 
+```python  
+from predictor import PredictorDCV  
+pred = PredictorDCV.carregar('dcv_modelo.pkl')  
+resultado = pred.prever(dicionario_do_paciente)  # dict com as 20 features do contrato  
+``` 
+
+3. A aba **"🧪 Simulador de Risco (Modelo)"** do próprio dashboard (`streamlit run app.py`) usa esse modelo no navegador: predição individual com classe de risco e fatores de risco (SHAP)  

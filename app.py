@@ -24,6 +24,8 @@ from src.dashboard_comps import (
     fig_prevalencia_comorbidade,
 )
 
+from src.simulador import render_aba_simulador
+
 # Configuração da página
 st.set_page_config(
     page_title="HeartHealth - Dashboard de Triagem e Análise",
@@ -71,20 +73,21 @@ st.markdown(
     "Ferramenta de análise epidemiológica e suporte à triagem de risco clínico cardiovascular."
 )
 
-# Abas do Dashboard
-tab1, tab2, tab3, tab4 = st.tabs(
-    [
-        "📊 Visão Geral & Epidemiologia",
-        "🔍 Outliers & Qualidade dos Dados",
-        "🩺 Fatores Clínicos & Triagem",
-        "🧩 Segmentação por Clusters",
-    ]
-)
+# Abas do Dashboard — radio horizontal: a seleção persiste entre reruns
+# (st.tabs sempre volta para a primeira aba após qualquer interação).
+ABAS = [
+    "📊 Visão Geral & Epidemiologia",
+    "🔍 Outliers & Qualidade dos Dados",
+    "🩺 Fatores Clínicos & Triagem",
+    "🧩 Segmentação por Clusters",
+    "🧪 Simulador de Risco (Modelo)",
+]
+aba = st.radio("Navegação", ABAS, horizontal=True, label_visibility="collapsed")
 
 # ==============================================================================
 # ABA 1: VISÃO GERAL & EPIDEMIOLOGIA
 # ==============================================================================
-with tab1:
+if aba == ABAS[0]:
     st.header("Panorama Geral da Base de Dados")
 
     # KPIs principais
@@ -115,7 +118,7 @@ with tab1:
 # ==============================================================================
 # ABA 2: OUTLIERS & QUALIDADE DOS DADOS
 # ==============================================================================
-with tab2:
+if aba == ABAS[1]:
     st.header("Diagnóstico do Tratamento de Dados e Outliers")
 
     o_col1, o_col2 = st.columns(2)
@@ -135,7 +138,7 @@ with tab2:
 # ==============================================================================
 # ABA 3: FATORES CLÍNICOS & TRIAGEM
 # ==============================================================================
-with tab3:
+if aba == ABAS[2]:
     st.header("Análise de Fatores Clínicos de Risco")
 
     c_col1, c_col2 = st.columns(2)
@@ -151,7 +154,7 @@ with tab3:
 # ==============================================================================
 # ABA 4: SEGMENTAÇÃO POR CLUSTERS
 # ==============================================================================
-with tab4:
+if aba == ABAS[3]:
     st.header("Segmentação de Perfis (K-Prototypes)")
 
     resultados = load_cluster_resultados()
@@ -211,3 +214,9 @@ with tab4:
                 "padronizadas + one-hot das categóricas); a curva de custo "
                 "(cotovelo) é exibida como apoio à decisão."
             )
+
+# ==============================================================================
+# ABA 5: SIMULADOR DE RISCO (MODELO SUPERVISIONADO)
+# ==============================================================================
+if aba == ABAS[4]:
+    render_aba_simulador()
