@@ -28,3 +28,6 @@ Thumbs.db
 
 # Saidas geradas pelo clustering (executar src/clustering_teste.py)
 data/resultados_cluster/
+ 
+# Artefatos do modelo supervisionado (executar src/train_model.py) 
+data/modelo/ 

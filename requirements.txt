@@ -7,3 +7,5 @@ plotly
 kmodes
 matplotlib
 
+xgboost 
+joblib 
