@@ -27,7 +27,12 @@ ENV/
 Thumbs.db
 
 # Saidas geradas pelo clustering (executar src/clustering_teste.py)
-data/resultados_cluster/
+# Versiona os artefatos prontos consumidos pelo dashboard (app.py).
+data/resultados_cluster/*
+!data/resultados_cluster/dados_clusterizados.parquet
+!data/resultados_cluster/resumo_clusters.csv
+!data/resultados_cluster/metricas_k.csv
+!data/resultados_cluster/relatorio_cluster_kprototypes.txt
  
 # Artefatos do modelo supervisionado (executar src/train_model.py)
 # Ignora as saidas derivadas (tabelas/CSVs/markdown), mas versiona o artefato
