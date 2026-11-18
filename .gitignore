@@ -29,5 +29,9 @@ Thumbs.db
 # Saidas geradas pelo clustering (executar src/clustering_teste.py)
 data/resultados_cluster/
  
-# Artefatos do modelo supervisionado (executar src/train_model.py) 
-data/modelo/ 
+# Artefatos do modelo supervisionado (executar src/train_model.py)
+# Ignora as saidas derivadas (tabelas/CSVs/markdown), mas versiona o artefato
+# do modelo treinado e suas metricas (consumidos pelo app via src/predictor.py).
+data/modelo/*
+!data/modelo/dcv_modelo.pkl
+!data/modelo/metricas_modelo.json 
