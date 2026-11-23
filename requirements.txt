@@ -6,6 +6,10 @@ streamlit
 plotly
 kmodes
 matplotlib
+hdbscan
+umap-learn
 
 xgboost 
 joblib 
+imbalanced-learn
+tabulate 
