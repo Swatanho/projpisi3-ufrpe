@@ -46,6 +46,9 @@ class PredictorDCV:
         self.versao = artefato.get('versao', 'desconhecida')  
         self._winsor_bmi = tuple(artefato['winsor_bmi'])  
         self.metricas_teste = artefato.get('metricas_teste', dict()) 
+        # Calibrador isotônico (opcional): corrige a probabilidade inflada pelo
+        # scale_pos_weight. Ausente em artefatos antigos (v1.0.0).
+        self._calibrador = artefato.get('calibrador', None)  
  
     @classmethod  
     def carregar(cls, caminho=None):  
@@ -82,8 +85,16 @@ class PredictorDCV:
         dm = self._matriz(dados)  
         it = getattr(self._modelo, 'best_iteration', None)  
         if it is None:  
-            return self._modelo.predict(dm)  
-        return self._modelo.predict(dm, iteration_range=(0, it + 1))  
+            prob = self._modelo.predict(dm)  
+        else:  
+            prob = self._modelo.predict(dm, iteration_range=(0, it + 1))  
+        return self._calibrar(prob)  
+
+    def _calibrar(self, prob):  
+        '''Aplica o calibrador isotônico (se presente) às probabilidades.'''  
+        if self._calibrador is None:  
+            return prob  
+        return self._calibrador.predict(np.asarray(prob, dtype=float))  
  
     def _classificar(self, prob):  
         if prob >= self.threshold:  
@@ -110,6 +121,8 @@ class PredictorDCV:
             faixa = (0, it + 1)  
             prob = float(self._modelo.predict(dm, iteration_range=faixa)[0])  
             contribs = self._modelo.predict(dm, pred_contribs=True, iteration_range=faixa)[0]  
+        # Calibra a probabilidade exibida (mantém os fatores SHAP em logito).  
+        prob = float(self._calibrar(np.array([prob]))[0])  
  
         valores = df.iloc[0][self.features]  
         fatores = []  

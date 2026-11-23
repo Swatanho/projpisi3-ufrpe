@@ -28,6 +28,7 @@ import joblib
 import numpy as np  
 import pandas as pd  
 import xgboost as xgb  
+from sklearn.isotonic import IsotonicRegression  
 from sklearn.linear_model import LogisticRegression  
 from sklearn.metrics import (  
     average_precision_score,  
@@ -56,7 +57,7 @@ FEATURES = [
 ]  
  
 SEED = 42  
-VERSION = '1.0.0'  
+VERSION = '1.1.0'  
 TEST_SIZE = 0.20        # hold-out final, tocado uma unica vez  
 VAL_FRAC = 0.10         # fracao do treino p/ early stopping e threshold  
 CV_FOLDS = 5  
@@ -204,9 +205,16 @@ def executar():
     modelo = treinar_xgb(X_in, y_in, X_val, y_val)  
     print('melhor iteracao: {}'.format(modelo.best_iteration))  
     prob_val = prever(modelo, X_val)  
- 
+
+    # Calibracao isotonica: corrige a probabilidade inflada pelo  
+    # scale_pos_weight (media ~36% -> ~10% = prevalencia real), sem mudar o  
+    # ranking (ROC-AUC). O calibrador e salvo no artefato e aplicado na inferencia.  
+    calibrador = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds='clip')  
+    calibrador.fit(prob_val, y_val)  
+    prob_val_cal = calibrador.predict(prob_val)  
+
     piso = PISO_PREVALENCIA * float(y_val.mean())  
-    threshold, regra = escolher_threshold(y_val, prob_val, piso)  
+    threshold, regra = escolher_threshold(y_val, prob_val_cal, piso)  
     print('[3/4] Threshold de triagem: {:.2f} ({})'.format(threshold, regra))  
     print('   piso de precisao adotado: {:.3f}'.format(piso))  
  
@@ -216,6 +224,9 @@ def executar():
     for fold, (idx_tr, idx_va) in enumerate(skf.split(X_tr, y_tr), start=1):  
         m = treinar_xgb(X_tr.iloc[idx_tr], y_tr.iloc[idx_tr], X_tr.iloc[idx_va], y_tr.iloc[idx_va])  
         prob_fold = prever(m, X_tr.iloc[idx_va])  
+        iso_fold = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds='clip')  
+        iso_fold.fit(prob_fold, y_tr.iloc[idx_va])  
+        prob_fold = iso_fold.predict(prob_fold)  
         met = metricas_em(y_tr.iloc[idx_va], prob_fold, threshold)  
         cv.append(met)  
         r_fold = met['recall']  
@@ -223,11 +234,12 @@ def executar():
         print('   fold {}: recall {:.3f} / pr_auc {:.3f}'.format(fold, r_fold, pr_fold))  
  
     prob_te = prever(modelo, X_te)  
-    met_teste = metricas_em(y_te, prob_te, threshold)  
-    met_teste_050 = metricas_em(y_te, prob_te, 0.5)  
-    met_lr_val = metricas_em(y_val, prob_lr_val, threshold)  
-    met_lr_teste = metricas_em(y_te, lr.predict_proba(X_te)[:, 1], threshold)  
-    met_val = metricas_em(y_val, prob_val, threshold)  
+    prob_te_cal = calibrador.predict(prob_te)  
+    met_teste = metricas_em(y_te, prob_te_cal, threshold)  
+    met_teste_050 = metricas_em(y_te, prob_te_cal, 0.5)  
+    met_lr_val = metricas_em(y_val, prob_lr_val, 0.5)  
+    met_lr_teste = metricas_em(y_te, lr.predict_proba(X_te)[:, 1], 0.5)  
+    met_val = metricas_em(y_val, prob_val_cal, threshold)  
  
     print('')  
     print('=' * 60)  
@@ -246,6 +258,7 @@ def executar():
         'modelo': modelo,  
         'features': FEATURES,  
         'threshold': float(threshold),  
+        'calibrador': calibrador,  
         'winsor_bmi': winsor_bmi,  
         'prevalencia_base': float(y.mean()),  
         'versao': VERSION,  
@@ -273,6 +286,7 @@ def executar():
         'xgb_teste_threshold_050': met_teste_050,  
         'baseline_logreg_validacao': met_lr_val,  
         'baseline_logreg_teste': met_lr_teste,  
+        'calibracao': 'isotônica aplicada (corrige a probabilidade inflada pelo scale_pos_weight)',  
     }  
     caminho_json = OUTPUT_DIR / 'metricas_modelo.json'  
     caminho_json.write_text(  

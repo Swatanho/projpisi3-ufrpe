@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAW_DATA_PATH = (
@@ -39,14 +40,39 @@ def handle_bmi_winsorization(
 def detect_multivariate_outliers(
     df: pd.DataFrame, contamination: float = 0.01, random_state: int = 42
 ) -> pd.DataFrame:
-    """Sinaliza anomalias multivariadas utilizando o algoritmo Isolation Forest."""
+    """Sinaliza anomalias multivariadas com Isolation Forest sobre as 20 features.
+
+    Método (responde a "como foram calculados os outliers multivariados?"):
+      - As contínuas (BMI, PhysHlth, MentHlth) são padronizadas (StandardScaler /
+        Z-score) para que a magnitude (ex.: BMI ~25) não domine a distância das
+        variáveis binárias/ordinais;
+      - As binárias (0/1) e ordinais (GenHlth, Age, Education, Income) entram como
+        estão, preservando a ordem (sem one-hot);
+      - O Isolation Forest isola pontos por partições aleatórias recursivas
+        (poucos cortes para isolar = anômalo), não paramétrico e O(n log n), com
+        contamination=1%. Estratégia NÃO destrutiva: gera a flag `is_outlier`,
+        nenhum registro é descartado.
+
+    Ver também src/outliers_hdbscan.py (comparação com HDBSCAN).
+    """
     df_out = df.copy()
-    features_to_check = ["BMI", "PhysHlth", "MentHlth"]
+
+    # Features do contrato do app (20) — excluem o alvo e Diabetes_binary.
+    outlier_features = [
+        "HighBP", "HighChol", "CholCheck", "BMI", "Smoker", "Stroke",
+        "PhysActivity", "Fruits", "Veggies", "HvyAlcoholConsump",
+        "AnyHealthcare", "NoDocbcCost", "GenHlth", "MentHlth", "PhysHlth",
+        "DiffWalk", "Sex", "Age", "Education", "Income",
+    ]
+    num_cols = ["BMI", "PhysHlth", "MentHlth"]
+
+    X = df_out[outlier_features].astype(float)
+    X[num_cols] = StandardScaler().fit_transform(X[num_cols])
 
     iso = IsolationForest(
         contamination=contamination, random_state=random_state, n_jobs=-1
     )
-    preds = iso.fit_predict(df_out[features_to_check])
+    preds = iso.fit_predict(X)
 
     df_out["is_outlier"] = preds == -1
     return df_out
