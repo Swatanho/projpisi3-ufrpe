@@ -34,6 +34,10 @@ data/resultados_cluster/*
 !data/resultados_cluster/metricas_k.csv
 !data/resultados_cluster/metricas_comparacao.csv
  
+# Notas locais (nao versionar)
+docs/respostas-feedback-orientador.md
+docs/respostas-feedback-orientador.txt
+
 # Artefatos do modelo supervisionado (executar src/train_model.py)
 # Ignora as saidas derivadas (tabelas/CSVs/markdown), mas versiona o artefato
 # do modelo treinado e suas metricas (consumidos pelo app via src/predictor.py).
