@@ -465,8 +465,8 @@ def fig_auditoria_sweep(sweep: pd.DataFrame):
             mode="lines+markers", line={"color": COR_DESTAQUE, "dash": "dot"},
         )
     )
-    fig.add_vline(x=0.36, line_dash="dash", line_color="#666666",
-                  annotation_text="triagem (0.36)")
+    fig.add_vline(x=0.075, line_dash="dash", line_color="#666666",
+                  annotation_text="triagem (0.075)")
     fig.add_vline(x=0.5, line_dash="dot", line_color="#999999",
                   annotation_text="0.5")
     fig.update_layout(

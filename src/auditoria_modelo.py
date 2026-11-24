@@ -29,6 +29,7 @@ import json
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import (
     average_precision_score,
     fbeta_score,
@@ -111,6 +112,21 @@ def _predizer(modelo, X, feats):
     return modelo.predict(dm, iteration_range=(0, it + 1))
 
 
+def _calibrar_prob(modelo, X_val, y_val, X_alvo, feats):
+    """Ajusta a calibração isotônica na validação e aplica ao alvo.
+
+    Corrige a probabilidade inflada pelo scale_pos_weight (mesma calibração
+    usada no train_model.py), mantendo o ranking (ROC-AUC) inalterado. Sem
+    isso, o sweep de threshold e as métricas @0.5 ficam numa escala
+    incomparável com o modelo operacional (threshold 0.075).
+    """
+    prob_val = _predizer(modelo, X_val, feats)
+    iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds='clip')
+    iso.fit(prob_val, y_val)
+    return iso.predict(_predizer(modelo, X_alvo, feats))
+
+
+
 def auditoria_univariada(df, X_te, y_te) -> pd.DataFrame:
     """AUC (isolada) e correlação de cada feature contra o alvo, no teste.
 
@@ -143,7 +159,7 @@ def ablar(df, X_tr, y_tr, X_val, y_val, X_te, y_te) -> pd.DataFrame:
 
     def _avaliar(nome, feats):
         m = _treinar(X_tr[feats], y_tr, X_val[feats], y_val, feats)
-        prob = _predizer(m, X_te[feats], feats)
+        prob = _calibrar_prob(m, X_val[feats], y_val, X_te[feats], feats)
         pred_05 = prob >= 0.5
         linhas.append({
             'config': nome,
@@ -229,15 +245,17 @@ def _escrever_relatorio(df, univ, ablacao, sweep, spw, prev):
         '',
         sweep.round(3).to_markdown(index=False),
         '',
-        '### Por que recall ~0.89 e precisão ~0.20?',
+        '### Por que recall ~0.87 e precisão ~0.22 na triagem?',
         '- Não é vazamento nem erro: com **prevalência de ~10%**, a precisão '
         'máxima alcançável é baixa quando se força **recall alto**. O threshold '
-        'operacional de triagem (0.36) foi escolhido como *maior recall sujeito '
-        'a precisão >= 2x a prevalência* (~0.21).',
-        '- Em 0.5, o modelo entrega recall ~0.79 com precisão ~0.25 (trade-off '
-        'inerente a uma triagem sensível). As métricas adequadas ao '
-        'desbalanceamento são **ROC-AUC (~0.83)** e **PR-AUC (~0.36)**, '
-        'independentes de threshold.',
+        'operacional de triagem (**0.075**, na escala calibrada) foi escolhido '
+        'como *maior recall sujeito a precisão >= 2x a prevalência* (~0.21).',
+        '- As probabilidades exibidas aqui são **calibradas (isotônica)**: a '
+        'média prevista volta a ~10% (= prevalência), sem alterar o ranking.',
+        '- Em 0.5 (calibrado), o modelo entrega recall ~0.08 com precisão '
+        '~0.55 — 0.5 agora significa ">50% de risco real", raro numa base de '
+        '10% de prevalência. As métricas adequadas ao desbalanceamento são '
+        '**ROC-AUC (~0.83)** e **PR-AUC (~0.36)**, independentes de threshold.',
         '- Conclusão: o gap é esperado e explicável; não indica vazamento.',
         '',
         '## 5. Referências',
@@ -277,10 +295,10 @@ def executar() -> dict:
     print('\n[2/3] Ablação de features suspeitas...')
     ablacao = ablar(df, X_in, y_in, X_val, y_val, X_te, y_te)
 
-    # 3) Sweep de threshold sobre o modelo completo
-    print('\n[3/3] Varredura de threshold (modelo completo)...')
+    # 3) Sweep de threshold sobre o modelo completo (probabilidades calibradas)
+    print('\n[3/3] Varredura de threshold (modelo completo, calibrado)...')
     m_full = _treinar(X_in[FEATURES], y_in, X_val[FEATURES], y_val, FEATURES)
-    prob_te = _predizer(m_full, X_te[FEATURES], FEATURES)
+    prob_te = _calibrar_prob(m_full, X_val[FEATURES], y_val, X_te[FEATURES], FEATURES)
     sweep = sweep_threshold(y_te, prob_te)
 
     # Salvamento
